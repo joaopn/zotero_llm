@@ -1,0 +1,36 @@
+# Zotero LLM Assistant Configuration
+
+# Zotero Web API Configuration (Required)
+zotero:
+  library_id: ""        # (REQUIRED) Your Zotero library ID 
+  library_type: "user"  # "user" or "group"
+  api_key: ""           # (REQUIRED) Your Zotero API key
+
+# LLM Configuration
+llm:
+  provider: ""        # (REQUIRED) Options: lm_studio, ollama, openai, anthropic
+  model: ""           # (REQUIRED) Model name (provider-specific)
+  api_key: null       # Set for remote providers (or use env var LLM_API_KEY)
+  max_tokens: null    # Maximum number of tokens to generate. Use null for default endpoint settings
+  temperature: null   # Temperature for the model. Use null for default endpoint settings
+
+# Default CLI Arguments
+defaults:
+  verbose: false
+  log_level: "INFO"
+
+# Prompts configuration file
+prompts_file: "prompts.yaml"
+
+# Task-specific configurations
+tasks:
+  analyze_item:
+    include_fulltext: true
+    max_prompt_chars: null         # Maximum total prompt length in characters (including fulltext + metadata)
+    create_note: true              # Save summary as note annotation
+  
+# Logging configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: null  # Set to file path to log to file
