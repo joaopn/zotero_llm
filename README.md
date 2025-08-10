@@ -1,10 +1,10 @@
 # Zotero LLM Assistant
 
-A simple, clean tool for analyzing and organizing your Zotero research library using Large Language Models.
+A simple, clean tool for analyzing and organizing your Zotero research library using local and remote Large Language Models.
 
 ## Tasks
 
-- **Paper analyzer**: Uses Zotero's web API to analyze a paper (from its ID) and write the result to a note (`analyze_item`)
+- **Paper analyzer** (`analyze_item`): Uses Zotero's web API to analyze a paper (using its ID) and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item.
 
 ## Quick Start
 

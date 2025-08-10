@@ -54,13 +54,35 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
             except Exception as e:
                 logging.warning(f"Failed to create note annotation: {e}")
         
+        # Add llm_summary tag to the item (or parent if it's an attachment)
+        tag_added = False
+        if note_created:
+            try:
+                # Determine which item to tag (same logic as note creation)
+                target_item_id = item_id
+                
+                # If this is an attachment, tag the parent item instead
+                if item_data.get('itemType') == 'attachment':
+                    parent_key = item_data.get('parentItem')
+                    if parent_key:
+                        target_item_id = parent_key
+                        logging.info(f"Item {item_id} is an attachment, adding tag to parent {target_item_id}")
+                
+                # Add the tag
+                tag_added = main.add_tag_to_item(zot, target_item_id, "llm_summary")
+                if tag_added:
+                    logging.info(f"Added 'llm_summary' tag to item {target_item_id}")
+            except Exception as e:
+                logging.warning(f"Failed to add llm_summary tag: {e}")
+        
         result = {
             'item_id': item_id,
             'title': title,
             'analysis': analysis,
             'has_fulltext': bool(fulltext),
             'fulltext_length': len(fulltext) if fulltext else 0,
-            'note_created': note_created
+            'note_created': note_created,
+            'tag_added': tag_added
         }
         
         logging.info(f"Analysis completed for item {item_id}")

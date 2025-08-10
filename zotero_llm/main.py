@@ -287,8 +287,7 @@ def create_note_annotation(zot: zotero.Zotero, item_id: str, content: str, model
         # Prepare note data
         note_data = {
             "itemType": "note",
-            "note": formatted_content,
-            "tags": [{"tag": "llm-summary"}]
+            "note": formatted_content
         }
         
         # Add parent item if we have one
@@ -309,6 +308,50 @@ def create_note_annotation(zot: zotero.Zotero, item_id: str, content: str, model
             
     except Exception as e:
         logging.error(f"Error creating note for item {item_id}: {e}")
+        return False
+
+
+def add_tag_to_item(zot: zotero.Zotero, item_id: str, tag: str) -> bool:
+    """
+    Add a tag to a Zotero item.
+    
+    Args:
+        zot: Zotero client instance
+        item_id: Zotero item ID
+        tag: Tag string to add
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Get current item
+        item = zot.item(item_id)
+        
+        # Get existing tags
+        existing_tags = item['data'].get('tags', [])
+        tag_names = [t.get('tag') for t in existing_tags]
+        
+        # Check if tag already exists
+        if tag in tag_names:
+            logging.info(f"Tag '{tag}' already exists on item {item_id}")
+            return True
+        
+        # Add the new tag
+        existing_tags.append({'tag': tag})
+        item['data']['tags'] = existing_tags
+        
+        # Save changes
+        result = zot.update_item(item)
+        
+        if result:
+            logging.info(f"Added tag '{tag}' to item {item_id}")
+            return True
+        else:
+            logging.error(f"Failed to add tag '{tag}' to item {item_id}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Error adding tag '{tag}' to item {item_id}: {e}")
         return False
 
 
