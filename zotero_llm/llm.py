@@ -50,6 +50,9 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
     model = llm_config.get('model')
     max_tokens = llm_config.get('max_tokens')
     temperature = llm_config.get('temperature')
+    top_p = llm_config.get('top_p')
+    top_k = llm_config.get('top_k')
+    min_p = llm_config.get('min_p')
     
     # Model is always required
     if not model:
@@ -79,12 +82,12 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
     
     # Provider-specific API handling
     if provider == 'anthropic':
-        return _call_anthropic_api(prompt, base_url, model, api_key, max_tokens, temperature)
+        return _call_anthropic_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
     else:
-        return _call_openai_compatible_api(prompt, base_url, model, api_key, max_tokens, temperature)
+        return _call_openai_compatible_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
 
 
-def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float) -> str:
+def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float) -> str:
     """Call OpenAI-compatible API (used by OpenAI, LM Studio, Ollama)"""
     try:
         headers = {
@@ -102,6 +105,12 @@ def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key:
             data['max_tokens'] = max_tokens
         if temperature is not None:
             data['temperature'] = temperature
+        if top_p is not None:
+            data['top_p'] = top_p
+        if top_k is not None:
+            data['top_k'] = top_k
+        if min_p is not None:
+            data['min_p'] = min_p
         
         # Ensure base_url ends with /chat/completions
         if not base_url.endswith('/chat/completions'):
@@ -149,7 +158,7 @@ def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key:
         raise
 
 
-def _call_anthropic_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float) -> str:
+def _call_anthropic_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float) -> str:
     """Call Anthropic Claude API (different format)"""
     try:
         headers = {
@@ -168,6 +177,11 @@ def _call_anthropic_api(prompt: str, base_url: str, model: str, api_key: str, ma
             data['max_tokens'] = max_tokens
         if temperature is not None:
             data['temperature'] = temperature
+        if top_p is not None:
+            data['top_p'] = top_p
+        if top_k is not None:
+            data['top_k'] = top_k
+        # Note: Anthropic doesn't support min_p, so we skip it
         
         api_url = f"{base_url}/messages"
         logging.info(f"Making Anthropic API call to: {api_url}")

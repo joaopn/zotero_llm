@@ -14,6 +14,9 @@ llm:
   api_key: null       # Set for remote providers (or use env var LLM_API_KEY)
   max_tokens: null    # Maximum number of tokens to generate. Use null for default endpoint settings
   temperature: null   # Temperature for the model. Use null for default endpoint settings
+  top_p: null         # Top-p (nucleus) sampling. Use null for default endpoint settings
+  top_k: null         # Top-k sampling. Use null for default endpoint settings
+  min_p: null         # Min-p sampling. Use null for default endpoint settings
 
 # Default CLI Arguments
 defaults:
