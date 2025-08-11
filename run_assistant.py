@@ -26,7 +26,7 @@ def parse_arguments():
     
     parser.add_argument(
         '--task',
-        choices=['analyze_item'],
+        choices=['analyze_item', 'analyze_collection'],
         required=True,
         help='Task to perform'
     )
@@ -37,8 +37,8 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        '--collection-id',
-        help='Zotero collection ID to process'
+        '--collection-path',
+        help='Hierarchical path to Zotero collection (e.g., "folder/subfolder")'
     )
     
     parser.add_argument(
@@ -57,6 +57,12 @@ def parse_arguments():
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
         default='INFO',
         help='Set logging level (default: INFO)'
+    )
+    
+    parser.add_argument(
+        '--skip-analyzed',
+        action='store_true',
+        help='Skip items that already have the llm_summary tag'
     )
     
     return parser.parse_args()
@@ -95,7 +101,29 @@ def main_cli():
                 item_id = args.item_id
             
             # Analyze the item
-            result = tasks.analyze_item(zot, item_id, config)
+            result = tasks.analyze_item(zot, item_id, config, args.skip_analyzed)
+            
+            # Print result for individual item
+            if result.get('skipped', False):
+                print(f"Item skipped: {result.get('skip_reason', 'Already analyzed')}")
+            else:
+                print(f"Analysis completed for item: {result['title']}")
+            
+        elif args.task == 'analyze_collection':
+            if not args.collection_path:
+                print("Error: --collection-path required for analyze_collection task")
+                sys.exit(1)
+            
+            # Analyze the collection
+            result = tasks.analyze_collection(zot, args.collection_path, config, args.skip_analyzed)
+            
+            # Print summary
+            print(f"\nCollection Analysis Summary:")
+            print(f"  Collection Path: {result['collection_path']}")
+            print(f"  Total Items: {result['total_items']}")
+            print(f"  Successfully Analyzed: {result['successful_analyses']}")
+            print(f"  Failed Analyses: {result['failed_analyses']}")
+            print(f"  Skipped Items: {result['skipped_analyses']}")
                 
         else:
             print(f"Unknown task: {args.task}")

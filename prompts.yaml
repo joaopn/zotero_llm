@@ -10,14 +10,20 @@ system_prompt: |
 tasks:
   analyze_item:
     prompt: |
-      Analyze the research paper below and provide a structured analysis. Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic.
-      
-      Structure your text in bullet points and the following sections:
+      Analyze the research paper below and provide a structured analysis. Structure your text in bullet points and the following sections:
         - Summary (3 bullet points): summarizes the paper main findings
         - Methods (3 bullet points): summarizes the paper methods. When possible, be quantitative. If the paper is a review, summarize the main findings of the papers reviewed.
         - Discussion (3 bullet points): discuss the paper impact, and any likely follow-up
         - Limitations (3 bullet points): discuss the paper limitations
 
-      
+       Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic. Do not include the instructions above in your response.
 
+  analyze_collection:
+    prompt: |
+      Analyze the research paper below and provide a structured analysis. Structure your text in bullet points and the following sections:
+        - Summary (3 bullet points): summarizes the paper main findings
+        - Methods (3 bullet points): summarizes the paper methods. When possible, be quantitative. If the paper is a review, summarize the main findings of the papers reviewed.
+        - Discussion (3 bullet points): discuss the paper impact, and any likely follow-up
+        - Limitations (3 bullet points): discuss the paper limitations
 
+       Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic. Do not include the instructions above in your response.

@@ -8,8 +8,9 @@ zotero:
 
 # LLM Configuration
 llm:
-  provider: ""        # (REQUIRED) Options: lm_studio, ollama, openai, anthropic
+  provider: ""        # (REQUIRED) Options: local, openai, anthropic
   model: ""           # (REQUIRED) Model name (provider-specific)
+  port: null          # (REQUIRED for local) Port for local provider (1234=LM Studio, 11434=Ollama)
   api_key: null       # Set for remote providers (or use env var LLM_API_KEY)
   max_tokens: null    # Maximum number of tokens to generate. Use null for default endpoint settings
   temperature: null   # Temperature for the model. Use null for default endpoint settings
@@ -28,6 +29,11 @@ tasks:
     include_fulltext: true
     max_prompt_chars: null         # Maximum total prompt length in characters (including fulltext + metadata)
     create_note: true              # Save summary as note annotation
+  analyze_collection:
+    include_fulltext: true
+    max_prompt_chars: null         # Maximum total prompt length in characters (including fulltext + metadata)
+    create_note: true              # Save summary as note annotation
+    recursive: true                # Include items from subcollections
   
 # Logging configuration
 logging:

@@ -355,4 +355,127 @@ def add_tag_to_item(zot: zotero.Zotero, item_id: str, tag: str) -> bool:
         return False
 
 
+def find_collection_by_path(zot: zotero.Zotero, collection_path: str) -> Optional[str]:
+    """
+    Find a collection by its hierarchical path (e.g., 'a/b/c').
+    
+    Args:
+        zot: Zotero client instance
+        collection_path: Slash-separated path to the collection
+        
+    Returns:
+        Collection key if found, None otherwise
+    """
+    try:
+        # Split the path into components
+        path_parts = [part.strip() for part in collection_path.strip('/').split('/') if part.strip()]
+        
+        if not path_parts:
+            raise ValueError("Empty collection path provided")
+        
+        # Get all collections
+        all_collections = zot.collections()
+        
+        # Create a mapping of collection key to collection data
+        collections_by_key = {col['key']: col for col in all_collections}
+        
+        # Start with top-level collections (no parentCollection)
+        current_collections = [col for col in all_collections if not col['data'].get('parentCollection')]
+        
+        # Navigate through the path
+        for i, part in enumerate(path_parts):
+            # Find collection with matching name at current level
+            found_collection = None
+            for col in current_collections:
+                if col['data'].get('name', '').lower() == part.lower():
+                    found_collection = col
+                    break
+            
+            if not found_collection:
+                logging.error(f"Collection '{part}' not found at path level {i + 1} in '{collection_path}'")
+                return None
+            
+            # If this is the last part, return the collection key
+            if i == len(path_parts) - 1:
+                logging.info(f"Found collection '{found_collection['data']['name']}' with key {found_collection['key']}")
+                return found_collection['key']
+            
+            # Otherwise, get subcollections for next iteration
+            collection_key = found_collection['key']
+            current_collections = [
+                col for col in all_collections 
+                if col['data'].get('parentCollection') == collection_key
+            ]
+            
+            if not current_collections:
+                logging.error(f"No subcollections found under '{part}' at path '{collection_path}'")
+                return None
+        
+        return None
+        
+    except Exception as e:
+        logging.error(f"Error finding collection by path '{collection_path}': {e}")
+        return None
+
+
+def has_llm_summary_tag(item: Dict[str, Any]) -> bool:
+    """
+    Check if an item has the llm_summary tag.
+    
+    Args:
+        item: Item metadata dictionary
+        
+    Returns:
+        True if item has llm_summary tag, False otherwise
+    """
+    tags = item.get('data', {}).get('tags', [])
+    tag_names = [tag.get('tag', '').lower() for tag in tags]
+    return 'llm_summary' in tag_names
+
+
+def get_collection_items(zot: zotero.Zotero, collection_key: str, recursive: bool = False) -> List[Dict[str, Any]]:
+    """
+    Get all items from a collection, optionally including subcollections.
+    
+    Args:
+        zot: Zotero client instance
+        collection_key: Zotero collection key
+        recursive: If True, include items from subcollections
+        
+    Returns:
+        List of item dictionaries (excluding attachments)
+    """
+    try:
+        # Get items directly in this collection
+        items = zot.collection_items(collection_key)
+        
+        # Filter out attachments to get only main items
+        main_items = [item for item in items if item['data'].get('itemType') != 'attachment']
+        
+        logging.info(f"Found {len(main_items)} main items in collection {collection_key}")
+        
+        if recursive:
+            # Get all collections to find subcollections
+            all_collections = zot.collections()
+            subcollections = [
+                col for col in all_collections 
+                if col['data'].get('parentCollection') == collection_key
+            ]
+            
+            # Recursively get items from subcollections
+            for subcol in subcollections:
+                subcol_key = subcol['key']
+                subcol_name = subcol['data'].get('name', 'Unknown')
+                logging.info(f"Processing subcollection: {subcol_name}")
+                
+                subcol_items = get_collection_items(zot, subcol_key, recursive=True)
+                main_items.extend(subcol_items)
+        
+        return main_items
+        
+    except Exception as e:
+        logging.error(f"Failed to get items from collection {collection_key}: {e}")
+        raise
+
+
 

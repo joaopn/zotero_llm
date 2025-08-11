@@ -11,7 +11,7 @@ from . import main
 from . import llm
 
 
-def analyze_item(zot, item_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
+def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool = False) -> Dict[str, Any]:
     """
     Analyze a Zotero item using LLM.
     
@@ -19,16 +19,44 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
         zot: Zotero client instance
         item_id: Zotero item ID
         config: Configuration dictionary
+        skip_analyzed: If True, skip items that already have llm_summary tag
         
     Returns:
         Analysis results dictionary
     """
     try:
-        # Get item metadata
+        # Get item metadata first
         item = main.get_item_metadata(zot, item_id)
         item_data = item.get('data', {})
         
         title = item_data.get('title', 'Unknown Title')
+        
+        # Check if item is already analyzed and should be skipped BEFORE doing any work
+        if skip_analyzed:
+            # For attachments, we need to check the parent item for the tag
+            target_item_for_tag_check = item
+            if item_data.get('itemType') == 'attachment':
+                parent_key = item_data.get('parentItem')
+                if parent_key:
+                    # Get parent item to check for tag
+                    parent_item = main.get_item_metadata(zot, parent_key)
+                    target_item_for_tag_check = parent_item
+                    logging.info(f"Item {item_id} is an attachment, checking parent {parent_key} for llm_summary tag")
+            
+            if main.has_llm_summary_tag(target_item_for_tag_check):
+                logging.info(f"Skipping already analyzed item: {title}")
+                return {
+                    'item_id': item_id,
+                    'title': title,
+                    'analysis': None,
+                    'has_fulltext': False,
+                    'fulltext_length': 0,
+                    'note_created': False,
+                    'tag_added': False,
+                    'skipped': True,
+                    'skip_reason': 'Already analyzed (has llm_summary tag)'
+                }
+        
         logging.info(f"Analyzing item: {title}")
         
         # Get fulltext if enabled
@@ -82,7 +110,8 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any]) -> Dict[str, Any]:
             'has_fulltext': bool(fulltext),
             'fulltext_length': len(fulltext) if fulltext else 0,
             'note_created': note_created,
-            'tag_added': tag_added
+            'tag_added': tag_added,
+            'skipped': False
         }
         
         logging.info(f"Analysis completed for item {item_id}")
@@ -149,5 +178,101 @@ Full Text:
             )
     
     return llm.call_llm(content_prompt, config)
+
+
+def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_analyzed: bool = False) -> Dict[str, Any]:
+    """
+    Analyze all items in a Zotero collection and its subcollections using LLM.
+    
+    Args:
+        zot: Zotero client instance
+        collection_path: Slash-separated path to the collection (e.g., 'a/b/c')
+        config: Configuration dictionary
+        skip_analyzed: If True, skip items that already have llm_summary tag
+        
+    Returns:
+        Analysis results dictionary
+    """
+    try:
+        # Find the collection by path
+        collection_key = main.find_collection_by_path(zot, collection_path)
+        if not collection_key:
+            raise ValueError(f"Collection not found at path: {collection_path}")
+        
+        # Get all items from the collection and its subcollections
+        items = main.get_collection_items(zot, collection_key, recursive=True)
+        
+        if not items:
+            logging.warning(f"No items found in collection at path: {collection_path}")
+            return {
+                'collection_path': collection_path,
+                'collection_key': collection_key,
+                'total_items': 0,
+                'analyzed_items': 0,
+                'successful_analyses': 0,
+                'failed_analyses': 0,
+                'skipped_analyses': 0,
+                'results': []
+            }
+        
+        logging.info(f"Found {len(items)} items to analyze in collection: {collection_path}")
+        
+        # Analyze each item
+        results = []
+        successful_analyses = 0
+        failed_analyses = 0
+        skipped_analyses = 0
+        
+        for i, item in enumerate(items, 1):
+            item_id = item.get('key')
+            title = item.get('data', {}).get('title', 'Unknown Title')
+            
+            logging.info(f"Processing item {i}/{len(items)}: {title}")
+            
+            try:
+                # Use the existing analyze_item function
+                result = analyze_item(zot, item_id, config, skip_analyzed)
+                results.append(result)
+                
+                if result.get('skipped', False):
+                    skipped_analyses += 1
+                    logging.info(f"Skipped item {i}/{len(items)}: {title}")
+                else:
+                    successful_analyses += 1
+                    logging.info(f"Successfully analyzed item {i}/{len(items)}: {title}")
+                
+            except Exception as e:
+                logging.error(f"Failed to analyze item {i}/{len(items)} ({title}): {e}")
+                failed_analyses += 1
+                results.append({
+                    'item_id': item_id,
+                    'title': title,
+                    'error': str(e),
+                    'analysis': None,
+                    'has_fulltext': False,
+                    'fulltext_length': 0,
+                    'note_created': False,
+                    'tag_added': False,
+                    'skipped': False
+                })
+        
+        collection_result = {
+            'collection_path': collection_path,
+            'collection_key': collection_key,
+            'total_items': len(items),
+            'analyzed_items': len(results),
+            'successful_analyses': successful_analyses,
+            'failed_analyses': failed_analyses,
+            'skipped_analyses': skipped_analyses,
+            'results': results
+        }
+        
+        logging.info(f"Collection analysis completed: {successful_analyses}/{len(items)} items successfully analyzed, {skipped_analyses} skipped")
+        
+        return collection_result
+        
+    except Exception as e:
+        logging.error(f"Failed to analyze collection at path '{collection_path}': {e}")
+        raise
 
 

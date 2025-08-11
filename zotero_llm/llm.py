@@ -11,12 +11,7 @@ from typing import Dict, Any
 
 # Provider configurations
 PROVIDER_CONFIGS = {
-    "lm_studio": {
-        "base_url": "http://localhost:1234/v1",
-        "api_key_required": False
-    },
-    "ollama": {
-        "base_url": "http://localhost:11434/v1", 
+    "local": {
         "api_key_required": False
     },
     "openai": {
@@ -45,14 +40,13 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
     llm_config = config.get('llm', {})
     
     # Get provider and validate
-    provider = llm_config.get('provider', 'lm_studio')
+    provider = llm_config.get('provider', 'local')
     if provider not in PROVIDER_CONFIGS:
         raise ValueError(f"Unknown provider: {provider}. Valid options: {list(PROVIDER_CONFIGS.keys())}")
     
     provider_config = PROVIDER_CONFIGS[provider]
     
-    # Use provider-specific settings
-    base_url = provider_config['base_url']
+    # Get common settings
     model = llm_config.get('model')
     max_tokens = llm_config.get('max_tokens')
     temperature = llm_config.get('temperature')
@@ -60,6 +54,19 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
     # Model is always required
     if not model:
         raise ValueError(f"Model is required for {provider}. Set model in config.yaml")
+    
+    # Handle base URL based on provider
+    if provider == 'local':
+        # For local provider, port is required
+        port = llm_config.get('port')
+        if not port:
+            raise ValueError("Port is required for local provider. Set port in config.yaml")
+        base_url = f"http://localhost:{port}/v1"
+        logging.info(f"Using local provider on port {port} with model: {model}")
+    else:
+        # For remote providers, use predefined base URL
+        base_url = provider_config['base_url']
+        logging.info(f"Using {provider} provider with model: {model}")
     
     # Handle API key based on provider requirements
     api_key = llm_config.get('api_key') or os.getenv('LLM_API_KEY')
@@ -69,8 +76,6 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
             raise ValueError(f"API key required for {provider}. Set api_key in config.yaml or LLM_API_KEY env var")
     else:
         api_key = api_key or 'not-needed'
-    
-    logging.info(f"Using {provider} provider with model: {model}")
     
     # Provider-specific API handling
     if provider == 'anthropic':

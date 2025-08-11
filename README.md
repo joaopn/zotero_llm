@@ -6,6 +6,8 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 - **Paper analyzer** (`analyze_item`): Uses Zotero's web API to analyze a paper (using its ID) and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item.
 
+- **Collection analyzer** (`analyze_collection`): Analyzes all papers in a collection and its subcollections. Uses the same analysis as `analyze_item` but processes multiple documents at once. Supports hierarchical collection paths (e.g., `folder/subfolder`).
+
 ## Quick Start
 
 1. **Install dependencies**:
@@ -20,18 +22,25 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
      api_key: "YOUR_API_KEY"
    
    llm:
-     provider: "lm_studio"    # Options: lm_studio, ollama, openai, anthropic
+     provider: "local"        # Options: local, openai, anthropic
      model: "local-model"     # Model name (REQUIRED)
+     port: 1234               # Port for local provider (REQUIRED - 1234=LM Studio, 11434=Ollama)
      api_key: null            # Only needed for openai/anthropic
    ```
 
-3. **Start your LLM server** (for local providers):
+3. **Start your LLM server** (for local provider):
    - **LM Studio**: Start server on port 1234
    - **Ollama**: `ollama serve` (uses port 11434)
+   - **Other local servers**: Use any port, just set it in `config.yaml`
 
 4. **Analyze an item**:
    ```bash
    python run_assistant.py --task analyze_item --item-id ITEM_KEY
+   ```
+
+5. **Analyze a collection**:
+   ```bash
+   python run_assistant.py --task analyze_collection --collection-path "folder/subfolder"
    ```
 
 ## Credentials
@@ -43,11 +52,13 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 ### LLM Provider Setup
 
-Currently supported providers are
+Currently supported providers are:
 
-- LM Studio: `lm_studio` (local)
-- Ollama: `ollama` (local)
-- OpenAI: `openai`
-- Anthropic: `anthropic`
+- **Local**: `local` (configurable port - supports LM Studio, Ollama, or any OpenAI-compatible local server)
+- **OpenAI**: `openai`
+- **Anthropic**: `anthropic`
 
-For the local providers, their default ports are hardcoded and `api_key` is `null`.
+For the local provider, you must specify the port in `config.yaml`. Common ports:
+- LM Studio: 1234
+- Ollama: 11434
+- Custom: any port your local server uses
