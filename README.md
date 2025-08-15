@@ -2,6 +2,8 @@
 
 A simple, clean tool for analyzing and organizing your Zotero research library using local and remote Large Language Models.
 
+**Important**: by default, this tool uses full text analysis. Please make sure you are using a model with enough context length, and that you understand the potential costs if using a remote provider. Open-weights SOTA models from OpenRouter are recommended due to being significantly cheaper than OpenAI or Anthropic.
+
 ## Tasks
 
 - **LLM Summary** (`llm_summary`): Uses Zotero's web API to analyze a paper and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item. Works on both individual items and entire collections.
