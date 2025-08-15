@@ -435,7 +435,7 @@ def has_llm_summary_tag(item: Dict[str, Any]) -> bool:
 
 def get_collection_items(zot: zotero.Zotero, collection_key: str, recursive: bool = False) -> List[Dict[str, Any]]:
     """
-    Get all items from a collection, optionally including subcollections.
+    Get all parent items from a collection, optionally including subcollections.
     
     Args:
         zot: Zotero client instance
@@ -443,16 +443,16 @@ def get_collection_items(zot: zotero.Zotero, collection_key: str, recursive: boo
         recursive: If True, include items from subcollections
         
     Returns:
-        List of item dictionaries (excluding attachments)
+        List of parent item dictionaries (excluding all child items like attachments and notes)
     """
     try:
         # Get items directly in this collection
         items = zot.collection_items(collection_key)
         
-        # Filter out attachments to get only main items
-        main_items = [item for item in items if item['data'].get('itemType') != 'attachment']
+        # Filter to get only parent items (items without a parentItem field)
+        parent_items = [item for item in items if not item['data'].get('parentItem')]
         
-        logging.info(f"Found {len(main_items)} main items in collection {collection_key}")
+        logging.info(f"Found {len(parent_items)} parent items in collection {collection_key}")
         
         if recursive:
             # Get all collections to find subcollections
@@ -469,9 +469,9 @@ def get_collection_items(zot: zotero.Zotero, collection_key: str, recursive: boo
                 logging.info(f"Processing subcollection: {subcol_name}")
                 
                 subcol_items = get_collection_items(zot, subcol_key, recursive=True)
-                main_items.extend(subcol_items)
+                parent_items.extend(subcol_items)
         
-        return main_items
+        return parent_items
         
     except Exception as e:
         logging.error(f"Failed to get items from collection {collection_key}: {e}")

@@ -16,7 +16,7 @@ tasks:
         - Discussion (3 bullet points): discuss the paper impact, and any likely follow-up
         - Limitations (3 bullet points): discuss the paper limitations
 
-       Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic. Do not include the instructions above in your response.
+       Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic. Do not include the instructions above in your response. Start the section headers with a hash.
 
   analyze_collection:
     prompt: |
@@ -26,4 +26,4 @@ tasks:
         - Discussion (3 bullet points): discuss the paper impact, and any likely follow-up
         - Limitations (3 bullet points): discuss the paper limitations
 
-       Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic. Do not include the instructions above in your response.
+       Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic. Do not include the instructions above in your response. Start the section headers with a hash.

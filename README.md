@@ -6,7 +6,7 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 - **Paper analyzer** (`analyze_item`): Uses Zotero's web API to analyze a paper (using its ID) and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item.
 
-- **Collection analyzer** (`analyze_collection`): Analyzes all papers in a collection and its subcollections. Uses the same analysis as `analyze_item` but processes multiple documents at once. Supports hierarchical collection paths (e.g., `folder/subfolder`).
+- **Collection analyzer** (`analyze_collection`): Analyzes all parent items in a collection and its subcollections. Uses the same analysis as `analyze_item` but processes multiple documents at once. Supports hierarchical collection paths (e.g., `folder/subfolder`). Automatically skips items with existing `llm_summary` tags to prevent duplicates.
 
 ## Quick Start
 
@@ -35,13 +35,39 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 4. **Analyze an item**:
    ```bash
-   python run_assistant.py --task analyze_item --item-id ITEM_KEY
+   python run_assistant.py analyze_item --item-id ITEM_KEY
    ```
 
 5. **Analyze a collection**:
    ```bash
-   python run_assistant.py --task analyze_collection --collection-path "folder/subfolder"
+   python run_assistant.py analyze_collection --collection-path "folder/subfolder"
    ```
+
+   **Pro tip**: By default, items already analyzed (with `llm_summary` tag) are skipped. Use `--no-skip-analyzed` to force re-analysis of all items.
+
+## Command Line Options
+
+### Common Flags
+- `-c, --config`: Configuration file path (default: `config.yaml`)
+- `--skip-analyzed`: Skip items already analyzed (default: `true`)
+- `--no-skip-analyzed`: Force re-analysis of all items, even those already processed
+- `--verbose`: Enable debug logging
+- `--log-level`: Set logging level (DEBUG, INFO, WARNING, ERROR)
+
+### Examples
+```bash
+# Analyze collection, skipping already processed items (default)
+python run_assistant.py analyze_collection --collection-path "Research/AI Papers"
+
+# Force re-analysis of all items in collection
+python run_assistant.py analyze_collection --collection-path "Research/AI Papers" --no-skip-analyzed
+
+# Use custom config file
+python run_assistant.py -c my_config.yaml analyze_item --item-id ABC123
+
+# Enable verbose logging
+python run_assistant.py --verbose analyze_collection --collection-path "Research"
+```
 
 ## Credentials
 

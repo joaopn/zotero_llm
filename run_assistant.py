@@ -19,15 +19,14 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        '--config', 
+        '--config', '-c',
         default='config.yaml',
         help='Path to configuration file (default: config.yaml)'
     )
     
     parser.add_argument(
-        '--task',
+        'task',
         choices=['analyze_item', 'analyze_collection'],
-        required=True,
         help='Task to perform'
     )
     
@@ -62,7 +61,15 @@ def parse_arguments():
     parser.add_argument(
         '--skip-analyzed',
         action='store_true',
-        help='Skip items that already have the llm_summary tag'
+        default=True,
+        help='Skip items that already have the llm_summary tag (default: True)'
+    )
+    
+    parser.add_argument(
+        '--no-skip-analyzed',
+        dest='skip_analyzed',
+        action='store_false',
+        help='Process all items, even those already analyzed'
     )
     
     return parser.parse_args()
