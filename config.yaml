@@ -8,7 +8,7 @@ zotero:
 
 # LLM Configuration
 llm:
-  provider: ""        # (REQUIRED) Options: local, openai, anthropic
+  provider: ""        # (REQUIRED) Options: local, openai, anthropic, openrouter
   model: ""           # (REQUIRED) Model name (provider-specific)
   port: null          # (REQUIRED for local) Port for local provider (1234=LM Studio, 11434=Ollama)
   api_key: null       # Set for remote providers (or use env var LLM_API_KEY)

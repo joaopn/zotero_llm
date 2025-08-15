@@ -21,6 +21,10 @@ PROVIDER_CONFIGS = {
     "anthropic": {
         "base_url": "https://api.anthropic.com/v1",
         "api_key_required": True
+    },
+    "openrouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "api_key_required": True
     }
 }
 
@@ -83,6 +87,8 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
     # Provider-specific API handling
     if provider == 'anthropic':
         return _call_anthropic_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
+    elif provider == 'openrouter':
+        return _call_openrouter_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
     else:
         return _call_openai_compatible_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
 
@@ -155,6 +161,71 @@ def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key:
         raise
     except Exception as e:
         logging.error(f"API call failed: {e}")
+        raise
+
+
+def _call_openrouter_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float) -> str:
+    """Call OpenRouter API (OpenAI-compatible with extra headers)"""
+    try:
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'HTTP-Referer': 'https://github.com/zotero-llm-assistant',  # Required by OpenRouter
+            'X-Title': 'Zotero LLM Assistant'  # Optional but nice
+        }
+        
+        data = {
+            'model': model,
+            'messages': [{'role': 'user', 'content': prompt}]
+        }
+        
+        # Only add optional parameters if configured
+        if max_tokens is not None:
+            data['max_tokens'] = max_tokens
+        if temperature is not None:
+            data['temperature'] = temperature
+        if top_p is not None:
+            data['top_p'] = top_p
+        if top_k is not None:
+            data['top_k'] = top_k
+        if min_p is not None:
+            data['min_p'] = min_p
+        
+        api_url = f"{base_url}/chat/completions"
+        logging.info(f"Making OpenRouter API call to: {api_url}")
+        
+        response = requests.post(
+            api_url,
+            headers=headers,
+            json=data,
+            timeout=120  # OpenRouter may need more time for some models
+        )
+        response.raise_for_status()
+        
+        result = response.json()
+        content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+        
+        if not content:
+            logging.warning(f"Empty response from OpenRouter. Full result: {result}")
+            return "No response generated"
+        
+        logging.info(f"OpenRouter API call successful ({len(content)} chars)")
+        
+        # Clean thinking patterns from response
+        cleaned_content = _remove_thinking_patterns(content)
+        if len(cleaned_content) != len(content):
+            logging.info(f"Removed thinking patterns ({len(content)} -> {len(cleaned_content)} chars)")
+        
+        return cleaned_content
+        
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 402:
+            logging.error("OpenRouter API call failed: Insufficient credits. Please check your OpenRouter account balance.")
+        else:
+            logging.error(f"OpenRouter API call failed with HTTP {e.response.status_code}: {e}")
+        raise
+    except Exception as e:
+        logging.error(f"OpenRouter API call failed: {e}")
         raise
 
 

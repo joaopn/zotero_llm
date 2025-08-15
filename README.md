@@ -24,10 +24,10 @@ Both tasks automatically skip items with existing tags to prevent duplicates and
      api_key: "YOUR_API_KEY"
    
    llm:
-     provider: "local"        # Options: local, openai, anthropic
+     provider: "local"        # Options: local, openai, anthropic, openrouter
      model: "local-model"     # Model name (REQUIRED)
      port: 1234               # Port for local provider (REQUIRED - 1234=LM Studio, 11434=Ollama)
-     api_key: null            # Only needed for openai/anthropic
+     api_key: null            # Only needed for remote providers
    ```
 
 3. **Start your LLM server** (for local provider):
@@ -121,8 +121,45 @@ Currently supported providers are:
 - **Local**: `local` (configurable port - supports LM Studio, Ollama, or any OpenAI-compatible local server)
 - **OpenAI**: `openai`
 - **Anthropic**: `anthropic`
+- **OpenRouter**: `openrouter` (access to 100+ models from different providers)
 
+#### Local Provider
 For the local provider, you must specify the port in `config.yaml`. Common ports:
 - LM Studio: 1234
 - Ollama: 11434
 - Custom: any port your local server uses
+
+#### Remote Providers
+For remote providers, set your API key in `config.yaml` or use the `LLM_API_KEY` environment variable.
+
+**OpenAI Example:**
+```yaml
+llm:
+  provider: "openai"
+  model: "gpt-4o"
+  api_key: "sk-..."
+  temperature: 0.7
+```
+
+**Anthropic Example:**
+```yaml
+llm:
+  provider: "anthropic" 
+  model: "claude-3-5-sonnet-20241022"
+  api_key: "sk-ant-..."
+  temperature: 0.7
+```
+
+**OpenRouter Example:**
+```yaml
+llm:
+  provider: "openrouter"
+  model: "anthropic/claude-3.5-sonnet"  # or "openai/gpt-4o", "meta-llama/llama-3.1-405b", etc.
+  api_key: "sk-or-..."
+  temperature: 0.7
+```
+
+#### Getting API Keys
+- **OpenAI**: Get your API key at https://platform.openai.com/api-keys
+- **Anthropic**: Get your API key at https://console.anthropic.com/
+- **OpenRouter**: Get your API key at https://openrouter.ai/keys (supports 100+ models from multiple providers)
