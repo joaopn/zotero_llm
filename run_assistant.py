@@ -43,7 +43,8 @@ def parse_arguments():
     
     parser.add_argument(
         '--collection-path',
-        help='Hierarchical path to Zotero collection (e.g., "folder/subfolder")'
+        nargs='+',
+        help='Hierarchical path(s) to Zotero collection(s) (e.g., "folder/subfolder" or multiple: "collection1" "collection2")'
     )
     
     parser.add_argument(
@@ -127,26 +128,46 @@ def main_cli():
                 print(f"Error: --collection-path required for collection {args.task} task")
                 sys.exit(1)
             
-            # Process the collection with the specified task
-            result = tasks.analyze_collection(zot, args.collection_path, config, args.skip_analyzed, args.task)
+            # Process multiple collections with the specified task
+            all_results = tasks.analyze_multiple_collections(zot, args.collection_path, config, args.skip_analyzed, args.task)
             
-            # Print summary
-            print(f"\nCollection {args.task} Summary:")
-            print(f"  Collection Path: {result['collection_path']}")
-            print(f"  Total Items: {result['total_items']}")
-            print(f"  Successfully Processed: {result['successful_analyses']}")
-            print(f"  Failed: {result['failed_analyses']}")
-            print(f"  Skipped Items: {result['skipped_analyses']}")
+            # Print overall summary
+            total_items = sum(result['total_items'] for result in all_results)
+            total_successful = sum(result['successful_analyses'] for result in all_results)
+            total_failed = sum(result['failed_analyses'] for result in all_results)
+            total_skipped = sum(result['skipped_analyses'] for result in all_results)
+            
+            print(f"\nMultiple Collections {args.task} Summary:")
+            print(f"  Collections Processed: {len(args.collection_path)}")
+            print(f"  Total Items: {total_items}")
+            print(f"  Successfully Processed: {total_successful}")
+            print(f"  Failed: {total_failed}")
+            print(f"  Skipped Items: {total_skipped}")
+            
+            # Print per-collection breakdown
+            print(f"\nPer-Collection Breakdown:")
+            for result in all_results:
+                print(f"  {result['collection_path']}: {result['successful_analyses']}/{result['total_items']} processed")
+            
+            # Aggregate skip/fail information
+            all_skipped_no_fulltext = []
+            all_failed_items = []
+            
+            for result in all_results:
+                if result.get('skipped_no_fulltext'):
+                    all_skipped_no_fulltext.extend(result['skipped_no_fulltext'])
+                if result.get('failed_items'):
+                    all_failed_items.extend(result['failed_items'])
             
             # Print detailed skip/fail information
-            if result.get('skipped_no_fulltext'):
+            if all_skipped_no_fulltext:
                 print(f"\nItems skipped (no fulltext):")
-                for title in result['skipped_no_fulltext']:
+                for title in all_skipped_no_fulltext:
                     print(f"  - {title}")
                     
-            if result.get('failed_items'):
+            if all_failed_items:
                 print(f"\nItems that failed:")
-                for item_error in result['failed_items']:
+                for item_error in all_failed_items:
                     print(f"  - {item_error}")
                 
         else:

@@ -53,6 +53,9 @@ Both tasks automatically skip items with existing tags to prevent duplicates and
    
    # Extract key references for all items in a collection
    python run_assistant.py collection key_references --collection-path "folder/subfolder"
+   
+   # Process multiple collections at once
+   python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" "Research/ML Theory" "Papers/NLP"
    ```
 
    **Pro tip**: By default, items already processed (with task-specific tags) are skipped. Use `--no-skip-analyzed` to force re-processing of all items.
@@ -82,7 +85,7 @@ python run_assistant.py [OPTIONS] OBJECT_TYPE TASK [TASK_OPTIONS]
 ### Task Options
 - `--item-id ITEM_ID`: Specific Zotero item ID to process
 - `--query "search term"`: Search for item by title/content
-- `--collection-path "path/to/collection"`: Hierarchical collection path
+- `--collection-path "path1" "path2" ...`: One or more hierarchical collection paths (supports subcollections)
 
 ### Examples
 ```bash
@@ -92,8 +95,11 @@ python run_assistant.py collection llm_summary --collection-path "Research/AI Pa
 # Extract key references for all items in collection
 python run_assistant.py collection key_references --collection-path "Research/AI Papers"
 
-# Force re-processing of all items in collection
-python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" --no-skip-analyzed
+# Process multiple collections at once
+python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" "Research/ML Theory" "Papers/NLP"
+
+# Force re-processing of all items in multiple collections
+python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" "Research/ML Theory" --no-skip-analyzed
 
 # Process single item by search query
 python run_assistant.py item llm_summary --query "attention mechanism"

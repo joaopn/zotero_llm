@@ -331,3 +331,56 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
         raise
 
 
+def analyze_multiple_collections(zot, collection_paths: List[str], config: Dict[str, Any], skip_analyzed: bool = False, task_name: str = 'llm_summary') -> List[Dict[str, Any]]:
+    """
+    Analyze multiple Zotero collections using LLM.
+    
+    Args:
+        zot: Zotero client instance
+        collection_paths: List of slash-separated paths to collections (e.g., ['a/b', 'c/d'])
+        config: Configuration dictionary
+        skip_analyzed: If True, skip items that already have task-specific tags
+        task_name: Name of the task to perform
+        
+    Returns:
+        List of analysis results dictionaries (one per collection)
+    """
+    results = []
+    
+    for i, collection_path in enumerate(collection_paths, 1):
+        logging.info(f"Processing collection {i}/{len(collection_paths)}: {collection_path}")
+        
+        try:
+            # Analyze this collection
+            result = analyze_collection(zot, collection_path, config, skip_analyzed, task_name)
+            results.append(result)
+            
+            logging.info(f"Completed collection {i}/{len(collection_paths)}: {collection_path} "
+                        f"({result['successful_analyses']}/{result['total_items']} items processed)")
+            
+        except Exception as e:
+            logging.error(f"Failed to analyze collection {i}/{len(collection_paths)} ({collection_path}): {e}")
+            # Add a failed result to maintain structure
+            results.append({
+                'collection_path': collection_path,
+                'collection_key': None,
+                'total_items': 0,
+                'analyzed_items': 0,
+                'successful_analyses': 0,
+                'failed_analyses': 0,
+                'skipped_analyses': 0,
+                'skipped_no_fulltext': [],
+                'skipped_already_analyzed': [],
+                'failed_items': [f"Collection processing failed: {str(e)}"],
+                'results': [],
+                'error': str(e)
+            })
+    
+    total_collections = len(collection_paths)
+    successful_collections = len([r for r in results if not r.get('error')])
+    
+    logging.info(f"Multiple collections analysis completed: {successful_collections}/{total_collections} collections processed successfully")
+    
+    return results
+
+
