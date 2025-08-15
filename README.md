@@ -4,9 +4,11 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 ## Tasks
 
-- **Paper analyzer** (`analyze_item`): Uses Zotero's web API to analyze a paper (using its ID) and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item.
+- **LLM Summary** (`llm_summary`): Uses Zotero's web API to analyze a paper and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item. Works on both individual items and entire collections.
 
-- **Collection analyzer** (`analyze_collection`): Analyzes all parent items in a collection and its subcollections. Uses the same analysis as `analyze_item` but processes multiple documents at once. Supports hierarchical collection paths (e.g., `folder/subfolder`). Automatically skips items with existing `llm_summary` tags to prevent duplicates.
+- **Key References** (`key_references`): Extracts the most important and influential references from a research paper and writes them to a "Key References" note. Adds a "key_references" tag to the item. Works on both individual items and entire collections.
+
+Both tasks automatically skip items with existing tags to prevent duplicates and require fulltext (PDFs) by default.
 
 ## Quick Start
 
@@ -33,40 +35,76 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
    - **Ollama**: `ollama serve` (uses port 11434)
    - **Other local servers**: Use any port, just set it in `config.yaml`
 
-4. **Analyze an item**:
+4. **Process an item**:
    ```bash
-   python run_assistant.py analyze_item --item-id ITEM_KEY
+   # Generate LLM summary for an item
+   python run_assistant.py item llm_summary --item-id ITEM_KEY
+   
+   # Extract key references from an item
+   python run_assistant.py item key_references --item-id ITEM_KEY
    ```
 
-5. **Analyze a collection**:
+5. **Process a collection**:
    ```bash
-   python run_assistant.py analyze_collection --collection-path "folder/subfolder"
+   # Generate LLM summaries for all items in a collection
+   python run_assistant.py collection llm_summary --collection-path "folder/subfolder"
+   
+   # Extract key references for all items in a collection
+   python run_assistant.py collection key_references --collection-path "folder/subfolder"
    ```
 
-   **Pro tip**: By default, items already analyzed (with `llm_summary` tag) are skipped. Use `--no-skip-analyzed` to force re-analysis of all items.
+   **Pro tip**: By default, items already processed (with task-specific tags) are skipped. Use `--no-skip-analyzed` to force re-processing of all items.
 
 ## Command Line Options
 
+### Command Structure
+```bash
+python run_assistant.py [OPTIONS] OBJECT_TYPE TASK [TASK_OPTIONS]
+```
+
+**Object Types:**
+- `item` - Process a single item
+- `collection` - Process all items in a collection
+
+**Tasks:**
+- `llm_summary` - Generate LLM analysis summary
+- `key_references` - Extract key references from paper
+
 ### Common Flags
 - `-c, --config`: Configuration file path (default: `config.yaml`)
-- `--skip-analyzed`: Skip items already analyzed (default: `true`)
-- `--no-skip-analyzed`: Force re-analysis of all items, even those already processed
+- `--skip-analyzed`: Skip items already processed (default: `true`)
+- `--no-skip-analyzed`: Force re-processing of all items, even those already processed
 - `--verbose`: Enable debug logging
 - `--log-level`: Set logging level (DEBUG, INFO, WARNING, ERROR)
 
+### Task Options
+- `--item-id ITEM_ID`: Specific Zotero item ID to process
+- `--query "search term"`: Search for item by title/content
+- `--collection-path "path/to/collection"`: Hierarchical collection path
+
 ### Examples
 ```bash
-# Analyze collection, skipping already processed items (default)
-python run_assistant.py analyze_collection --collection-path "Research/AI Papers"
+# Generate LLM summaries for collection, skipping already processed items (default)
+python run_assistant.py collection llm_summary --collection-path "Research/AI Papers"
 
-# Force re-analysis of all items in collection
-python run_assistant.py analyze_collection --collection-path "Research/AI Papers" --no-skip-analyzed
+# Extract key references for all items in collection
+python run_assistant.py collection key_references --collection-path "Research/AI Papers"
+
+# Force re-processing of all items in collection
+python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" --no-skip-analyzed
+
+# Process single item by search query
+python run_assistant.py item llm_summary --query "attention mechanism"
 
 # Use custom config file
-python run_assistant.py -c my_config.yaml analyze_item --item-id ABC123
+python run_assistant.py -c my_config.yaml item key_references --item-id ABC123
 
 # Enable verbose logging
-python run_assistant.py --verbose analyze_collection --collection-path "Research"
+python run_assistant.py --verbose collection llm_summary --collection-path "Research"
+
+# Process items without PDFs using metadata only
+python run_assistant.py item llm_summary --item-id ABC123
+# (Set include_fulltext: false in config.yaml for metadata-only analysis)
 ```
 
 ## Credentials

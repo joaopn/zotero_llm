@@ -25,8 +25,14 @@ def parse_arguments():
     )
     
     parser.add_argument(
+        'object_type',
+        choices=['item', 'collection'],
+        help='Type of object to process (item or collection)'
+    )
+    
+    parser.add_argument(
         'task',
-        choices=['analyze_item', 'analyze_collection'],
+        choices=['llm_summary', 'key_references'],
         help='Task to perform'
     )
     
@@ -91,9 +97,9 @@ def main_cli():
         zot = main.get_zotero_client(config)
         
         # Execute task based on arguments
-        if args.task == 'analyze_item':
+        if args.object_type == 'item':
             if not args.item_id and not args.query:
-                print("Error: --item-id or --query required for analyze_item task")
+                print(f"Error: --item-id or --query required for item {args.task} task")
                 sys.exit(1)
             
             # If query provided, search for items first
@@ -107,29 +113,29 @@ def main_cli():
             else:
                 item_id = args.item_id
             
-            # Analyze the item
-            result = tasks.analyze_item(zot, item_id, config, args.skip_analyzed)
+            # Process the item with the specified task
+            result = tasks.analyze_item(zot, item_id, config, args.skip_analyzed, args.task)
             
             # Print result for individual item
             if result.get('skipped', False):
-                print(f"Item skipped: {result.get('skip_reason', 'Already analyzed')}")
+                print(f"Item skipped: {result.get('skip_reason', 'Already processed')}")
             else:
-                print(f"Analysis completed for item: {result['title']}")
+                print(f"{args.task} completed for item: {result['title']}")
             
-        elif args.task == 'analyze_collection':
+        elif args.object_type == 'collection':
             if not args.collection_path:
-                print("Error: --collection-path required for analyze_collection task")
+                print(f"Error: --collection-path required for collection {args.task} task")
                 sys.exit(1)
             
-            # Analyze the collection
-            result = tasks.analyze_collection(zot, args.collection_path, config, args.skip_analyzed)
+            # Process the collection with the specified task
+            result = tasks.analyze_collection(zot, args.collection_path, config, args.skip_analyzed, args.task)
             
             # Print summary
-            print(f"\nCollection Analysis Summary:")
+            print(f"\nCollection {args.task} Summary:")
             print(f"  Collection Path: {result['collection_path']}")
             print(f"  Total Items: {result['total_items']}")
-            print(f"  Successfully Analyzed: {result['successful_analyses']}")
-            print(f"  Failed Analyses: {result['failed_analyses']}")
+            print(f"  Successfully Processed: {result['successful_analyses']}")
+            print(f"  Failed: {result['failed_analyses']}")
             print(f"  Skipped Items: {result['skipped_analyses']}")
             
             # Print detailed skip/fail information
@@ -144,7 +150,7 @@ def main_cli():
                     print(f"  - {item_error}")
                 
         else:
-            print(f"Unknown task: {args.task}")
+            print(f"Unknown object type: {args.object_type}")
             sys.exit(1)
             
     except Exception as e:

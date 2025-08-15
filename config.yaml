@@ -28,15 +28,14 @@ prompts_file: "prompts.yaml"
 
 # Task-specific configurations
 tasks:
-  analyze_item:
+  llm_summary:
     include_fulltext: true
     max_prompt_chars: null         # Maximum total prompt length in characters (including fulltext + metadata)
     create_note: true              # Save summary as note annotation
-  analyze_collection:
+  key_references:
     include_fulltext: true
     max_prompt_chars: null         # Maximum total prompt length in characters (including fulltext + metadata)
-    create_note: true              # Save summary as note annotation
-    recursive: true                # Include items from subcollections
+    create_note: true              # Save key references as note annotation
   
 # Logging configuration
 logging:

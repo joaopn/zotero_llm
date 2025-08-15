@@ -27,3 +27,17 @@ tasks:
         - Limitations (3 bullet points): discuss the paper limitations
 
        Format your response headers as a markdown document. Do not use any other formatting. Do not use markdown bold or italic. Do not include the instructions above in your response. Start the section headers with a hash.
+
+  key_references:
+    prompt: |
+      Extract the most important and influential references from the research paper below. Focus on:
+        - Foundational works that this paper builds upon
+        - Key methodological papers cited
+        - Most influential recent works in the field
+        - Papers that represent major findings or breakthroughs mentioned
+
+      Provide 5-8 key references in the following format:
+        - Author(s) (Year). Title. Journal/Conference.
+          - Brief 1-sentence description of why this reference is important to the paper.
+
+      Do not include every reference - only select the most crucial ones that are central to understanding this paper's contribution and context. Do not include references that are not cited in the paper. Do not include references in the introduction that are only used to exemplify a point. Do not use any formatting other than bullet points. Do not include the instructions above in your response.

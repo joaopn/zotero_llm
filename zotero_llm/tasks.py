@@ -11,19 +11,40 @@ from . import main
 from . import llm
 
 
-def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool = False) -> Dict[str, Any]:
+def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool = False, task_name: str = 'llm_summary') -> Dict[str, Any]:
     """
-    Analyze a Zotero item using LLM.
+    Analyze a Zotero item using LLM with configurable task.
     
     Args:
         zot: Zotero client instance
         item_id: Zotero item ID
         config: Configuration dictionary
-        skip_analyzed: If True, skip items that already have llm_summary tag
+        skip_analyzed: If True, skip items that already have the task tag
+        task_name: Name of the task (analyze_item, key_references, etc.)
         
     Returns:
         Analysis results dictionary
     """
+    # Task configuration mapping
+    TASK_CONFIGS = {
+        'llm_summary': {
+            'prompt': 'analyze_item',
+            'note_name': 'LLM Summary',
+            'tag': 'llm_summary'
+        },
+        'key_references': {
+            'prompt': 'key_references', 
+            'note_name': 'Key References',
+            'tag': 'key_references'
+        }
+    }
+    
+    # Validate task name
+    if task_name not in TASK_CONFIGS:
+        raise ValueError(f"Unknown task: {task_name}. Available tasks: {list(TASK_CONFIGS.keys())}")
+    
+    task_config = TASK_CONFIGS[task_name]
+    
     try:
         # Get item metadata first
         item = main.get_item_metadata(zot, item_id)
@@ -31,7 +52,9 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
         
         title = item_data.get('title', 'Unknown Title')
         
-        # Check if item is already analyzed and should be skipped BEFORE doing any work
+        # Check if item is already processed and should be skipped BEFORE doing any work
+        tag_name = task_config['tag']
+        
         if skip_analyzed:
             # For attachments, we need to check the parent item for the tag
             target_item_for_tag_check = item
@@ -41,10 +64,13 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
                     # Get parent item to check for tag
                     parent_item = main.get_item_metadata(zot, parent_key)
                     target_item_for_tag_check = parent_item
-                    logging.info(f"Item {item_id} is an attachment, checking parent {parent_key} for llm_summary tag")
+                    logging.info(f"Item {item_id} is an attachment, checking parent {parent_key} for {tag_name} tag")
             
-            if main.has_llm_summary_tag(target_item_for_tag_check):
-                logging.info(f"Skipping already analyzed item: {title}")
+            # Check for task-specific tag
+            tags = target_item_for_tag_check.get('data', {}).get('tags', [])
+            tag_names = [tag.get('tag', '').lower() for tag in tags]
+            if tag_name in tag_names:
+                logging.info(f"Skipping already processed item: {title}")
                 return {
                     'item_id': item_id,
                     'title': title,
@@ -54,16 +80,17 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
                     'note_created': False,
                     'tag_added': False,
                     'skipped': True,
-                    'skip_reason': 'Already analyzed (has llm_summary tag)'
+                    'skip_reason': f'Already processed (has {tag_name} tag)'
                 }
         
-        logging.info(f"Analyzing item: {title}")
+        action = "Analyzing" if task_name == 'llm_summary' else f"Processing ({task_name})"
+        logging.info(f"{action} item: {title}")
         
         # Get fulltext - required for analysis
-        task_config = config.get('tasks', {}).get('analyze_item', {})
+        config_section = config.get('tasks', {}).get(task_name, {})
         
         fulltext = ""
-        if task_config.get('include_fulltext', True):
+        if config_section.get('include_fulltext', True):
             fulltext_content = main.get_item_fulltext(zot, item_id)
             if fulltext_content:
                 fulltext = fulltext_content
@@ -82,21 +109,22 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
                     'skip_reason': 'No fulltext available'
                 }
         
-        # Call LLM for analysis
-        analysis = _analyze_item_with_llm(item_data, fulltext, config)
+        # Call LLM for analysis/processing
+        analysis = _analyze_item_with_llm(item_data, fulltext, config, task_config['prompt'])
         
         # Create note annotation with the analysis (if enabled)
+        note_title = task_config['note_name']
         note_created = False
-        if task_config.get('create_note', True):
+        if config_section.get('create_note', True):
             try:
                 # Get model name from config
                 model_name = config.get('llm', {}).get('model', 'Unknown Model')
                 note_content = f"<pre>{analysis}</pre>"
-                note_created = main.create_note_annotation(zot, item_id, note_content, model_name, "LLM Summary")
+                note_created = main.create_note_annotation(zot, item_id, note_content, model_name, note_title)
             except Exception as e:
                 logging.warning(f"Failed to create note annotation: {e}")
         
-        # Add llm_summary tag to the item (or parent if it's an attachment)
+        # Add task-specific tag to the item (or parent if it's an attachment)
         tag_added = False
         if note_created:
             try:
@@ -111,11 +139,11 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
                         logging.info(f"Item {item_id} is an attachment, adding tag to parent {target_item_id}")
                 
                 # Add the tag
-                tag_added = main.add_tag_to_item(zot, target_item_id, "llm_summary")
+                tag_added = main.add_tag_to_item(zot, target_item_id, tag_name)
                 if tag_added:
-                    logging.info(f"Added 'llm_summary' tag to item {target_item_id}")
+                    logging.info(f"Added '{tag_name}' tag to item {target_item_id}")
             except Exception as e:
-                logging.warning(f"Failed to add llm_summary tag: {e}")
+                logging.warning(f"Failed to add {tag_name} tag: {e}")
         
         result = {
             'item_id': item_id,
@@ -128,9 +156,9 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
             'skipped': False
         }
         
-        logging.info(f"Analysis completed for item {item_id}")
+        logging.info(f"{task_name} completed for item {item_id}")
         if note_created:
-            logging.info(f"Summary saved as note annotation for item {item_id}")
+            logging.info(f"{note_title} saved as note annotation for item {item_id}")
         
         return result
         
@@ -139,7 +167,7 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
         raise
 
 
-def _analyze_item_with_llm(item_data: Dict[str, Any], fulltext: str, config: Dict[str, Any]) -> str:
+def _analyze_item_with_llm(item_data: Dict[str, Any], fulltext: str, config: Dict[str, Any], prompt_name: str = 'analyze_item') -> str:
     """
     Analyze a Zotero item using LLM.
     
@@ -156,9 +184,9 @@ def _analyze_item_with_llm(item_data: Dict[str, Any], fulltext: str, config: Dic
     prompts_config = main.load_prompts(prompts_file)
     
     # Get task-specific prompt or use default
-    task_prompt = prompts_config.get('tasks', {}).get('analyze_item', {}).get('prompt', '')
+    task_prompt = prompts_config.get('tasks', {}).get(prompt_name, {}).get('prompt', '')
     if not task_prompt:
-        raise ValueError("No prompt found for 'analyze_item' in the prompts configuration. Please check your prompts.yaml file.")
+        raise ValueError(f"No prompt found for '{prompt_name}' in the prompts configuration. Please check your prompts.yaml file.")
     
     # Extract relevant information from item data
     title = item_data.get('title', 'Unknown Title')
@@ -180,8 +208,9 @@ Full Text:
 """
     
     # Check if the prompt exceeds the maximum length (if configured)
-    task_config = config.get('tasks', {}).get('analyze_item', {})
-    max_prompt_chars = task_config.get('max_prompt_chars')
+    # Note: We use prompt_name here to look up config since it matches the task section
+    config_section = config.get('tasks', {}).get(prompt_name, {})
+    max_prompt_chars = config_section.get('max_prompt_chars')
     
     if max_prompt_chars is not None:
         if len(content_prompt) > max_prompt_chars:
@@ -194,7 +223,7 @@ Full Text:
     return llm.call_llm(content_prompt, config)
 
 
-def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_analyzed: bool = False) -> Dict[str, Any]:
+def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_analyzed: bool = False, task_name: str = 'llm_summary') -> Dict[str, Any]:
     """
     Analyze all items in a Zotero collection and its subcollections using LLM.
     
@@ -248,7 +277,7 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
             
             try:
                 # Use the existing analyze_item function
-                result = analyze_item(zot, item_id, config, skip_analyzed)
+                result = analyze_item(zot, item_id, config, skip_analyzed, task_name)
                 results.append(result)
                 
                 if result.get('skipped', False):
