@@ -131,6 +131,17 @@ def main_cli():
             print(f"  Successfully Analyzed: {result['successful_analyses']}")
             print(f"  Failed Analyses: {result['failed_analyses']}")
             print(f"  Skipped Items: {result['skipped_analyses']}")
+            
+            # Print detailed skip/fail information
+            if result.get('skipped_no_fulltext'):
+                print(f"\nItems skipped (no fulltext):")
+                for title in result['skipped_no_fulltext']:
+                    print(f"  - {title}")
+                    
+            if result.get('failed_items'):
+                print(f"\nItems that failed:")
+                for item_error in result['failed_items']:
+                    print(f"  - {item_error}")
                 
         else:
             print(f"Unknown task: {args.task}")

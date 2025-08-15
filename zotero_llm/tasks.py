@@ -59,14 +59,28 @@ def analyze_item(zot, item_id: str, config: Dict[str, Any], skip_analyzed: bool 
         
         logging.info(f"Analyzing item: {title}")
         
-        # Get fulltext if enabled
-        fulltext = ""
+        # Get fulltext - required for analysis
         task_config = config.get('tasks', {}).get('analyze_item', {})
         
+        fulltext = ""
         if task_config.get('include_fulltext', True):
             fulltext_content = main.get_item_fulltext(zot, item_id)
             if fulltext_content:
                 fulltext = fulltext_content
+            else:
+                # No fulltext available - skip this item
+                logging.info(f"Skipping item {title} - no fulltext available")
+                return {
+                    'item_id': item_id,
+                    'title': title,
+                    'analysis': None,
+                    'has_fulltext': False,
+                    'fulltext_length': 0,
+                    'note_created': False,
+                    'tag_added': False,
+                    'skipped': True,
+                    'skip_reason': 'No fulltext available'
+                }
         
         # Call LLM for analysis
         analysis = _analyze_item_with_llm(item_data, fulltext, config)
@@ -222,6 +236,9 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
         successful_analyses = 0
         failed_analyses = 0
         skipped_analyses = 0
+        skipped_no_fulltext = []
+        skipped_already_analyzed = []
+        failed_items = []
         
         for i, item in enumerate(items, 1):
             item_id = item.get('key')
@@ -236,7 +253,12 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
                 
                 if result.get('skipped', False):
                     skipped_analyses += 1
-                    logging.info(f"Skipped item {i}/{len(items)}: {title}")
+                    skip_reason = result.get('skip_reason', '')
+                    if 'No fulltext available' in skip_reason:
+                        skipped_no_fulltext.append(title)
+                    elif 'Already analyzed' in skip_reason:
+                        skipped_already_analyzed.append(title)
+                    logging.info(f"Skipped item {i}/{len(items)}: {title} ({skip_reason})")
                 else:
                     successful_analyses += 1
                     logging.info(f"Successfully analyzed item {i}/{len(items)}: {title}")
@@ -244,6 +266,7 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
             except Exception as e:
                 logging.error(f"Failed to analyze item {i}/{len(items)} ({title}): {e}")
                 failed_analyses += 1
+                failed_items.append(f"{title}: {str(e)}")
                 results.append({
                     'item_id': item_id,
                     'title': title,
@@ -264,6 +287,9 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
             'successful_analyses': successful_analyses,
             'failed_analyses': failed_analyses,
             'skipped_analyses': skipped_analyses,
+            'skipped_no_fulltext': skipped_no_fulltext,
+            'skipped_already_analyzed': skipped_already_analyzed,
+            'failed_items': failed_items,
             'results': results
         }
         
