@@ -398,6 +398,148 @@ def analyze_unfiled_items(zot, config: Dict[str, Any], skip_analyzed: bool = Fal
         raise
 
 
+def manage_missing_pdf_flags(zot, config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Database-level task to manage missing_pdf flags on all items.
+    
+    Args:
+        zot: Zotero client instance
+        config: Configuration dictionary
+        
+    Returns:
+        Results dictionary with statistics and processed items
+    """
+    try:
+        logging.info("Starting missing_pdf flag management for entire library")
+        
+        # Get all items and collections in bulk (efficient)
+        logging.info("Fetching all items and collections...")
+        all_items = zot.everything(zot.items())
+        all_collections = zot.everything(zot.collections())
+        
+        # Create lookup dictionaries for efficiency
+        collections_by_key = {col['key']: col for col in all_collections}
+        
+        # Separate parent items and attachments
+        parent_items = [item for item in all_items if not item['data'].get('parentItem')]
+        attachments = [item for item in all_items if item['data'].get('itemType') == 'attachment']
+        
+        logging.info(f"Found {len(parent_items)} parent items and {len(attachments)} attachments")
+        
+        # Build PDF availability lookup (no individual API calls!)
+        items_with_pdfs = set()
+        for attachment in attachments:
+            if (attachment['data'].get('contentType') == 'application/pdf' and 
+                attachment['data'].get('parentItem')):
+                items_with_pdfs.add(attachment['data']['parentItem'])
+        
+        logging.info(f"Found {len(items_with_pdfs)} items with PDF attachments")
+        
+        # Process parent items efficiently
+        flags_added = []
+        flags_removed = []
+        errors = []
+        items_missing_pdfs = []
+        
+        for i, item in enumerate(parent_items, 1):
+            item_id = item.get('key')
+            title = item.get('data', {}).get('title', 'Unknown Title')
+            
+            if i % 100 == 0:  # Progress logging every 100 items
+                logging.info(f"Processed {i}/{len(parent_items)} items...")
+            
+            try:
+                # Check PDF availability from our lookup (no API call!)
+                has_pdf = item_id in items_with_pdfs
+                
+                # Get current tags
+                current_tags = item.get('data', {}).get('tags', [])
+                current_tag_names = [tag.get('tag', '').lower() for tag in current_tags]
+                has_missing_pdf_tag = 'missing_pdf' in current_tag_names
+                
+                # Get item collections from the collections we already fetched
+                collection_keys = item.get('data', {}).get('collections', [])
+                collection_names = []
+                for collection_key in collection_keys:
+                    if collection_key in collections_by_key:
+                        # Build full path for nested collections
+                        path_parts = []
+                        current_collection = collections_by_key[collection_key]
+                        
+                        # Walk up the hierarchy
+                        while current_collection:
+                            path_parts.insert(0, current_collection['data'].get('name', 'Unknown'))
+                            parent_key = current_collection['data'].get('parentCollection')
+                            current_collection = collections_by_key.get(parent_key) if parent_key else None
+                        
+                        collection_names.append('/'.join(path_parts))
+                
+                collection_display = ', '.join(collection_names) if collection_names else 'Unfiled'
+                
+                if not has_pdf:
+                    # Item missing PDF
+                    items_missing_pdfs.append({
+                        'title': title,
+                        'item_id': item_id,
+                        'collections': collection_display
+                    })
+                    
+                    # Add missing_pdf tag if not present
+                    if not has_missing_pdf_tag:
+                        success = main.add_tag_to_item(zot, item_id, 'missing_pdf')
+                        if success:
+                            flags_added.append({
+                                'title': title,
+                                'item_id': item_id,
+                                'collections': collection_display
+                            })
+                            logging.info(f"Added missing_pdf flag to: {title}")
+                        else:
+                            logging.warning(f"Failed to add missing_pdf flag to: {title}")
+                else:
+                    # Item has PDF - remove flag if present
+                    if has_missing_pdf_tag:
+                        success = main.remove_tag_from_item(zot, item_id, 'missing_pdf')
+                        if success:
+                            flags_removed.append({
+                                'title': title,
+                                'item_id': item_id,
+                                'collections': collection_display
+                            })
+                            logging.info(f"Removed missing_pdf flag from: {title}")
+                        else:
+                            logging.warning(f"Failed to remove missing_pdf flag from: {title}")
+                
+            except Exception as e:
+                error_msg = f"({item_id}) {title}: {str(e)}"
+                errors.append(error_msg)
+                logging.error(f"Error processing item {title}: {e}")
+        
+        # Compile results
+        result = {
+            'total_items': len(parent_items),
+            'items_with_pdfs': len(items_with_pdfs),
+            'items_without_pdfs': len(items_missing_pdfs),
+            'flags_added': len(flags_added),
+            'flags_removed': len(flags_removed),
+            'errors': len(errors),
+            'items_missing_pdf': items_missing_pdfs,
+            'flags_added_details': flags_added,
+            'flags_removed_details': flags_removed,
+            'error_details': errors
+        }
+        
+        logging.info(f"Missing PDF flag management completed: {len(parent_items)} items processed, "
+                    f"{len(flags_added)} flags added, {len(flags_removed)} flags removed, "
+                    f"{len(errors)} errors")
+        
+        return result
+        
+    except Exception as e:
+        logging.error(f"Failed to manage missing_pdf flags: {e}")
+        raise
+
+
 def analyze_multiple_collections(zot, collection_paths: List[str], config: Dict[str, Any], skip_analyzed: bool = False, task_name: str = 'llm_summary') -> List[Dict[str, Any]]:
     """
     Analyze multiple Zotero collections using LLM.

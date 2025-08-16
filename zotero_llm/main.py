@@ -355,6 +355,45 @@ def add_tag_to_item(zot: zotero.Zotero, item_id: str, tag: str) -> bool:
         return False
 
 
+def remove_tag_from_item(zot: zotero.Zotero, item_id: str, tag: str) -> bool:
+    """
+    Remove a tag from a Zotero item.
+    
+    Args:
+        zot: Zotero client instance
+        item_id: Zotero item ID
+        tag: Tag to remove
+        
+    Returns:
+        True if tag was removed successfully, False otherwise
+    """
+    try:
+        # Get current item data
+        item = zot.item(item_id)
+        item_data = item['data']
+        
+        # Get current tags
+        current_tags = item_data.get('tags', [])
+        
+        # Filter out the tag to remove (case-insensitive)
+        updated_tags = [t for t in current_tags if t.get('tag', '').lower() != tag.lower()]
+        
+        # Check if tag was found and removed
+        if len(updated_tags) == len(current_tags):
+            logging.info(f"Tag '{tag}' not found on item {item_id}")
+            return True  # Consider it successful if tag wasn't there
+        
+        # Update the item with filtered tags
+        item_data['tags'] = updated_tags
+        zot.update_item(item)
+        logging.info(f"Successfully removed tag '{tag}' from item {item_id}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Error removing tag '{tag}' from item {item_id}: {e}")
+        return False
+
+
 def find_collection_by_path(zot: zotero.Zotero, collection_path: str) -> Optional[str]:
     """
     Find a collection by its hierarchical path (e.g., 'a/b/c').
@@ -431,6 +470,77 @@ def has_llm_summary_tag(item: Dict[str, Any]) -> bool:
     tags = item.get('data', {}).get('tags', [])
     tag_names = [tag.get('tag', '').lower() for tag in tags]
     return 'llm_summary' in tag_names
+
+
+def get_item_collections(zot: zotero.Zotero, item: Dict[str, Any]) -> List[str]:
+    """
+    Get the collection names that an item belongs to.
+    
+    Args:
+        zot: Zotero client instance
+        item: Item dictionary
+        
+    Returns:
+        List of collection names (paths) the item belongs to
+    """
+    try:
+        collection_keys = item.get('data', {}).get('collections', [])
+        if not collection_keys:
+            return []
+        
+        # Get all collections to build collection name mapping
+        all_collections = zot.everything(zot.collections())
+        collections_by_key = {col['key']: col for col in all_collections}
+        
+        collection_names = []
+        for collection_key in collection_keys:
+            if collection_key in collections_by_key:
+                # Build full path for nested collections
+                path_parts = []
+                current_collection = collections_by_key[collection_key]
+                
+                # Walk up the hierarchy
+                while current_collection:
+                    path_parts.insert(0, current_collection['data'].get('name', 'Unknown'))
+                    parent_key = current_collection['data'].get('parentCollection')
+                    current_collection = collections_by_key.get(parent_key) if parent_key else None
+                
+                collection_names.append('/'.join(path_parts))
+        
+        return collection_names
+        
+    except Exception as e:
+        logging.warning(f"Failed to get collections for item: {e}")
+        return []
+
+
+def check_item_has_pdf(zot: zotero.Zotero, item_id: str) -> bool:
+    """
+    Check if an item has at least one PDF attachment.
+    
+    Args:
+        zot: Zotero client instance
+        item_id: Zotero item ID
+        
+    Returns:
+        True if item has at least one PDF attachment, False otherwise
+    """
+    try:
+        # Get all children of this item
+        children = zot.children(item_id)
+        
+        # Check if any child is a PDF attachment
+        for child in children:
+            child_data = child.get('data', {})
+            if (child_data.get('itemType') == 'attachment' and 
+                child_data.get('contentType') == 'application/pdf'):
+                return True
+        
+        return False
+        
+    except Exception as e:
+        logging.warning(f"Failed to check PDF for item {item_id}: {e}")
+        return False
 
 
 def get_unfiled_items(zot: zotero.Zotero) -> List[Dict[str, Any]]:

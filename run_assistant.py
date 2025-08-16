@@ -25,15 +25,16 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        'object_type',
-        choices=['item', 'collection'],
-        help='Type of object to process (item or collection)'
+        'task',
+        choices=['llm_summary', 'key_references', 'missing_pdf'],
+        help='Task to perform'
     )
     
     parser.add_argument(
-        'task',
-        choices=['llm_summary', 'key_references'],
-        help='Task to perform'
+        'object_type',
+        nargs='?',
+        choices=['item', 'collection'],
+        help='Type of object to process (required for item/collection tasks)'
     )
     
     parser.add_argument(
@@ -102,6 +103,12 @@ def main_cli():
         
         # Get Zotero client
         zot = main.get_zotero_client(config)
+        
+        # Check if task requires an object type
+        if args.task in ['llm_summary', 'key_references']:
+            if not args.object_type:
+                print(f"Error: object type (item or collection) required for {args.task} task")
+                sys.exit(1)
         
         # Execute task based on arguments
         if args.object_type == 'item':
@@ -198,8 +205,47 @@ def main_cli():
                 print(f"Error: --collection-path or --unfiled required for collection {args.task} task")
                 sys.exit(1)
                 
-        else:
+        elif args.object_type:
             print(f"Unknown object type: {args.object_type}")
+            sys.exit(1)
+        elif args.task == 'missing_pdf':
+            # Handle missing_pdf database-level task
+            result = tasks.manage_missing_pdf_flags(zot, config)
+            
+            # Print summary
+            print(f"\nMissing PDF Management Summary:")
+            print(f"  Total Items Processed: {result['total_items']}")
+            print(f"  Items with PDFs: {result['items_with_pdfs']}")
+            print(f"  Items without PDFs: {result['items_without_pdfs']}")
+            print(f"  Flags Added: {result['flags_added']}")
+            print(f"  Flags Removed: {result['flags_removed']}")
+            print(f"  Errors: {result['errors']}")
+            
+            # Print items missing PDFs
+            if result['items_missing_pdf']:
+                print(f"\nItems Missing PDFs:")
+                for item in result['items_missing_pdf']:
+                    print(f"  - ({item['item_id']}) {item['title']} [Collections: {item['collections']}]")
+            
+            # Print flag changes if any
+            if result['flags_added_details']:
+                print(f"\nAdded missing_pdf flags to:")
+                for item in result['flags_added_details']:
+                    print(f"  - {item['title']} [Collections: {item['collections']}]")
+            
+            if result['flags_removed_details']:
+                print(f"\nRemoved missing_pdf flags from:")
+                for item in result['flags_removed_details']:
+                    print(f"  - {item['title']} [Collections: {item['collections']}]")
+            
+            # Print errors if any
+            if result['error_details']:
+                print(f"\nErrors encountered:")
+                for error in result['error_details']:
+                    print(f"  - {error}")
+        else:
+            # Handle other database-level tasks here in the future
+            print(f"Database-level task {args.task} not yet implemented")
             sys.exit(1)
             
     except Exception as e:

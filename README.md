@@ -40,25 +40,31 @@ Both tasks automatically skip items with existing tags to prevent duplicates and
 4. **Process an item**:
    ```bash
    # Generate LLM summary for an item
-   python run_assistant.py item llm_summary --item-id ITEM_KEY
+   python run_assistant.py llm_summary item --item-id ITEM_KEY
    
    # Extract key references from an item
-   python run_assistant.py item key_references --item-id ITEM_KEY
+   python run_assistant.py key_references item --item-id ITEM_KEY
    ```
 
 5. **Process a collection**:
    ```bash
    # Generate LLM summaries for all items in a collection
-   python run_assistant.py collection llm_summary --collection-path "folder/subfolder"
+   python run_assistant.py llm_summary collection --collection-path "folder/subfolder"
    
    # Extract key references for all items in a collection
-   python run_assistant.py collection key_references --collection-path "folder/subfolder"
+   python run_assistant.py key_references collection --collection-path "folder/subfolder"
    
    # Process multiple collections at once
-   python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" "Research/ML Theory" "Papers/NLP"
+   python run_assistant.py llm_summary collection --collection-path "Research/AI Papers" "Research/ML Theory" "Papers/NLP"
    
    # Process all unfiled items (items not in any collection)
-   python run_assistant.py collection llm_summary --unfiled
+   python run_assistant.py llm_summary collection --unfiled
+   ```
+
+6. **Database-level tasks**:
+   ```bash
+   # Flag all items missing PDF attachments
+   python run_assistant.py missing_pdf
    ```
 
    **Pro tip**: By default, items already processed (with task-specific tags) are skipped. Use `--no-skip-analyzed` to force re-processing of all items.
@@ -67,7 +73,7 @@ Both tasks automatically skip items with existing tags to prevent duplicates and
 
 ### Command Structure
 ```bash
-python run_assistant.py [OPTIONS] OBJECT_TYPE TASK [TASK_OPTIONS]
+python run_assistant.py [OPTIONS] TASK [OBJECT_TYPE] [TASK_OPTIONS]
 ```
 
 **Object Types:**
@@ -75,8 +81,9 @@ python run_assistant.py [OPTIONS] OBJECT_TYPE TASK [TASK_OPTIONS]
 - `collection` - Process all items in a collection
 
 **Tasks:**
-- `llm_summary` - Generate LLM analysis summary
-- `key_references` - Extract key references from paper
+- `llm_summary` - Generate LLM analysis summary (requires object type)
+- `key_references` - Extract key references from paper (requires object type)  
+- `missing_pdf` - Flag items missing PDF attachments (database-level)
 
 ### Common Flags
 - `-c, --config`: Configuration file path (default: `config.yaml`)
@@ -94,35 +101,38 @@ python run_assistant.py [OPTIONS] OBJECT_TYPE TASK [TASK_OPTIONS]
 ### Examples
 ```bash
 # Generate LLM summaries for collection, skipping already processed items (default)
-python run_assistant.py collection llm_summary --collection-path "Research/AI Papers"
+python run_assistant.py llm_summary collection --collection-path "Research/AI Papers"
 
 # Extract key references for all items in collection
-python run_assistant.py collection key_references --collection-path "Research/AI Papers"
+python run_assistant.py key_references collection --collection-path "Research/AI Papers"
 
 # Process multiple collections at once
-python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" "Research/ML Theory" "Papers/NLP"
+python run_assistant.py llm_summary collection --collection-path "Research/AI Papers" "Research/ML Theory" "Papers/NLP"
 
 # Force re-processing of all items in multiple collections
-python run_assistant.py collection llm_summary --collection-path "Research/AI Papers" "Research/ML Theory" --no-skip-analyzed
+python run_assistant.py llm_summary collection --collection-path "Research/AI Papers" "Research/ML Theory" --no-skip-analyzed
 
 # Process all unfiled items (items not in any collection)
-python run_assistant.py collection llm_summary --unfiled
+python run_assistant.py llm_summary collection --unfiled
 
 # Extract key references from unfiled items only
-python run_assistant.py collection key_references --unfiled
+python run_assistant.py key_references collection --unfiled
 
 # Process single item by search query
-python run_assistant.py item llm_summary --query "attention mechanism"
+python run_assistant.py llm_summary item --query "attention mechanism"
 
 # Use custom config file
-python run_assistant.py -c my_config.yaml item key_references --item-id ABC123
+python run_assistant.py -c my_config.yaml key_references item --item-id ABC123
 
 # Enable verbose logging
-python run_assistant.py --verbose collection llm_summary --collection-path "Research"
+python run_assistant.py --verbose llm_summary collection --collection-path "Research"
 
 # Process items without PDFs using metadata only
-python run_assistant.py item llm_summary --item-id ABC123
+python run_assistant.py llm_summary item --item-id ABC123
 # (Set include_fulltext: false in config.yaml for metadata-only analysis)
+
+# Database-level task: flag items missing PDFs
+python run_assistant.py missing_pdf
 ```
 
 ## Credentials
