@@ -10,7 +10,9 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 - **Key References** (`key_references`): Extracts the most important and influential references from a research paper and writes them to a "Key References" note. Adds a "key_references" tag to the item. Works on both individual items and entire collections.
 
-Both tasks automatically skip items with existing tags to prevent duplicates and require fulltext (PDFs) by default.
+- **Missing PDF** (`missing_pdf`): Database-level task that flags all items without PDF attachments by adding a "missing_pdf" tag. Also removes the flag from items that now have PDFs. Prints the names and collection paths of affected items.
+
+The analysis tasks automatically skip items with existing tags to prevent duplicates and require fulltext (PDFs) by default.
 
 ## Quick Start
 
