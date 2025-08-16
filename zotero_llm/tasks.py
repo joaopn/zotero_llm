@@ -223,6 +223,107 @@ Full Text:
     return llm.call_llm(content_prompt, config)
 
 
+def _analyze_items_list(zot, items: List[Dict[str, Any]], config: Dict[str, Any], skip_analyzed: bool, task_name: str, collection_name: str, collection_key: str = None) -> Dict[str, Any]:
+    """
+    Analyze a list of items using LLM (shared logic for collections and unfiled items).
+    
+    Args:
+        zot: Zotero client instance
+        items: List of item dictionaries to analyze
+        config: Configuration dictionary
+        skip_analyzed: If True, skip items that already have task-specific tags
+        task_name: Name of the task to perform
+        collection_name: Display name for logging/results (e.g., "Collection Name" or "Unfiled Items")
+        collection_key: Collection key (None for unfiled items)
+        
+    Returns:
+        Analysis results dictionary
+    """
+    if not items:
+        logging.warning(f"No items found in {collection_name}")
+        return {
+            'collection_path': collection_name,
+            'collection_key': collection_key,
+            'total_items': 0,
+            'analyzed_items': 0,
+            'successful_analyses': 0,
+            'failed_analyses': 0,
+            'skipped_analyses': 0,
+            'skipped_no_fulltext': [],
+            'skipped_already_analyzed': [],
+            'failed_items': [],
+            'results': []
+        }
+    
+    logging.info(f"Found {len(items)} items to analyze in {collection_name}")
+    
+    # Analyze each item
+    results = []
+    successful_analyses = 0
+    failed_analyses = 0
+    skipped_analyses = 0
+    skipped_no_fulltext = []
+    skipped_already_analyzed = []
+    failed_items = []
+    
+    for i, item in enumerate(items, 1):
+        item_id = item.get('key')
+        title = item.get('data', {}).get('title', 'Unknown Title')
+        
+        logging.info(f"Processing item {i}/{len(items)}: {title}")
+        
+        try:
+            # Use the existing analyze_item function
+            result = analyze_item(zot, item_id, config, skip_analyzed, task_name)
+            results.append(result)
+            
+            if result.get('skipped', False):
+                skipped_analyses += 1
+                skip_reason = result.get('skip_reason', '')
+                if 'No fulltext available' in skip_reason:
+                    skipped_no_fulltext.append(title)
+                elif 'Already analyzed' in skip_reason:
+                    skipped_already_analyzed.append(title)
+                logging.info(f"Skipped item {i}/{len(items)}: {title} ({skip_reason})")
+            else:
+                successful_analyses += 1
+                logging.info(f"Successfully analyzed item {i}/{len(items)}: {title}")
+            
+        except Exception as e:
+            logging.error(f"Failed to analyze item {i}/{len(items)} ({title}): {e}")
+            failed_analyses += 1
+            failed_items.append(f"({item_id}) {title}: {str(e)}")
+            results.append({
+                'item_id': item_id,
+                'title': title,
+                'error': str(e),
+                'analysis': None,
+                'has_fulltext': False,
+                'fulltext_length': 0,
+                'note_created': False,
+                'tag_added': False,
+                'skipped': False
+            })
+    
+    result_dict = {
+        'collection_path': collection_name,
+        'collection_key': collection_key,
+        'total_items': len(items),
+        'analyzed_items': len(results),
+        'successful_analyses': successful_analyses,
+        'failed_analyses': failed_analyses,
+        'skipped_analyses': skipped_analyses,
+        'skipped_no_fulltext': skipped_no_fulltext,
+        'skipped_already_analyzed': skipped_already_analyzed,
+        'failed_items': failed_items,
+        'results': results
+    }
+    
+    logging.info(f"{collection_name} analysis completed: {successful_analyses}/{len(items)} items successfully analyzed, {skipped_analyses} skipped")
+    
+    return result_dict
+
+
 def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_analyzed: bool = False, task_name: str = 'llm_summary') -> Dict[str, Any]:
     """
     Analyze all items in a Zotero collection and its subcollections using LLM.
@@ -231,7 +332,8 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
         zot: Zotero client instance
         collection_path: Slash-separated path to the collection (e.g., 'a/b/c')
         config: Configuration dictionary
-        skip_analyzed: If True, skip items that already have llm_summary tag
+        skip_analyzed: If True, skip items that already have task-specific tags
+        task_name: Name of the task to perform
         
     Returns:
         Analysis results dictionary
@@ -245,89 +347,54 @@ def analyze_collection(zot, collection_path: str, config: Dict[str, Any], skip_a
         # Get all items from the collection and its subcollections
         items = main.get_collection_items(zot, collection_key, recursive=True)
         
-        if not items:
-            logging.warning(f"No items found in collection at path: {collection_path}")
+        # Reuse the shared analysis logic
+        return _analyze_items_list(zot, items, config, skip_analyzed, task_name, collection_path, collection_key)
+        
+    except Exception as e:
+        logging.error(f"Failed to analyze collection at path '{collection_path}': {e}")
+        raise
+
+
+def analyze_unfiled_items(zot, config: Dict[str, Any], skip_analyzed: bool = False, task_name: str = 'llm_summary') -> Dict[str, Any]:
+    """
+    Analyze all unfiled items (items not in any collection) using LLM.
+    
+    Args:
+        zot: Zotero client instance
+        config: Configuration dictionary
+        skip_analyzed: If True, skip items that already have task-specific tags
+        task_name: Name of the task to perform
+        
+    Returns:
+        Analysis results dictionary
+    """
+    try:
+        # Get all unfiled items
+        unfiled_items = main.get_unfiled_items(zot)
+        
+        if not unfiled_items:
+            logging.warning("No unfiled items found")
             return {
-                'collection_path': collection_path,
-                'collection_key': collection_key,
+                'collection_path': 'Unfiled Items',
+                'collection_key': None,
                 'total_items': 0,
                 'analyzed_items': 0,
                 'successful_analyses': 0,
                 'failed_analyses': 0,
                 'skipped_analyses': 0,
+                'skipped_no_fulltext': [],
+                'skipped_already_analyzed': [],
+                'failed_items': [],
                 'results': []
             }
         
-        logging.info(f"Found {len(items)} items to analyze in collection: {collection_path}")
+        logging.info(f"Found {len(unfiled_items)} unfiled items to analyze")
         
-        # Analyze each item
-        results = []
-        successful_analyses = 0
-        failed_analyses = 0
-        skipped_analyses = 0
-        skipped_no_fulltext = []
-        skipped_already_analyzed = []
-        failed_items = []
-        
-        for i, item in enumerate(items, 1):
-            item_id = item.get('key')
-            title = item.get('data', {}).get('title', 'Unknown Title')
-            
-            logging.info(f"Processing item {i}/{len(items)}: {title}")
-            
-            try:
-                # Use the existing analyze_item function
-                result = analyze_item(zot, item_id, config, skip_analyzed, task_name)
-                results.append(result)
-                
-                if result.get('skipped', False):
-                    skipped_analyses += 1
-                    skip_reason = result.get('skip_reason', '')
-                    if 'No fulltext available' in skip_reason:
-                        skipped_no_fulltext.append(title)
-                    elif 'Already analyzed' in skip_reason:
-                        skipped_already_analyzed.append(title)
-                    logging.info(f"Skipped item {i}/{len(items)}: {title} ({skip_reason})")
-                else:
-                    successful_analyses += 1
-                    logging.info(f"Successfully analyzed item {i}/{len(items)}: {title}")
-                
-            except Exception as e:
-                logging.error(f"Failed to analyze item {i}/{len(items)} ({title}): {e}")
-                failed_analyses += 1
-                failed_items.append(f"{title}: {str(e)}")
-                results.append({
-                    'item_id': item_id,
-                    'title': title,
-                    'error': str(e),
-                    'analysis': None,
-                    'has_fulltext': False,
-                    'fulltext_length': 0,
-                    'note_created': False,
-                    'tag_added': False,
-                    'skipped': False
-                })
-        
-        collection_result = {
-            'collection_path': collection_path,
-            'collection_key': collection_key,
-            'total_items': len(items),
-            'analyzed_items': len(results),
-            'successful_analyses': successful_analyses,
-            'failed_analyses': failed_analyses,
-            'skipped_analyses': skipped_analyses,
-            'skipped_no_fulltext': skipped_no_fulltext,
-            'skipped_already_analyzed': skipped_already_analyzed,
-            'failed_items': failed_items,
-            'results': results
-        }
-        
-        logging.info(f"Collection analysis completed: {successful_analyses}/{len(items)} items successfully analyzed, {skipped_analyses} skipped")
-        
-        return collection_result
+        # Reuse the existing collection analysis logic with unfiled items
+        return _analyze_items_list(zot, unfiled_items, config, skip_analyzed, task_name, 'Unfiled Items')
         
     except Exception as e:
-        logging.error(f"Failed to analyze collection at path '{collection_path}': {e}")
+        logging.error(f"Failed to analyze unfiled items: {e}")
         raise
 
 

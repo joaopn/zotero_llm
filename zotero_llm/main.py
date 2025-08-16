@@ -222,7 +222,7 @@ def get_collections(zot: zotero.Zotero) -> List[Dict[str, Any]]:
         List of collection dictionaries
     """
     try:
-        collections = zot.collections()
+        collections = zot.everything(zot.collections())
         logging.info(f"Retrieved {len(collections)} collections")
         return collections
     except Exception as e:
@@ -374,7 +374,7 @@ def find_collection_by_path(zot: zotero.Zotero, collection_path: str) -> Optiona
             raise ValueError("Empty collection path provided")
         
         # Get all collections
-        all_collections = zot.collections()
+        all_collections = zot.everything(zot.collections())
         
         # Create a mapping of collection key to collection data
         collections_by_key = {col['key']: col for col in all_collections}
@@ -433,6 +433,39 @@ def has_llm_summary_tag(item: Dict[str, Any]) -> bool:
     return 'llm_summary' in tag_names
 
 
+def get_unfiled_items(zot: zotero.Zotero) -> List[Dict[str, Any]]:
+    """
+    Get all items that are not assigned to any collection (unfiled items).
+    
+    Args:
+        zot: Zotero client instance
+        
+    Returns:
+        List of parent item dictionaries that are not in any collection
+    """
+    try:
+        # Get all items from the library (handles pagination automatically)
+        all_items = zot.everything(zot.items())
+        
+        # Filter to get only parent items that are not in any collection
+        # Items not in any collection have an empty 'collections' array
+        unfiled_items = [
+            item for item in all_items 
+            if not item['data'].get('parentItem')  # Only parent items
+            and not item['data'].get('collections', [])  # Not in any collection
+        ]
+        
+        total_parent_items = len([item for item in all_items if not item['data'].get('parentItem')])
+        
+        logging.info(f"Found {len(unfiled_items)} unfiled parent items out of {total_parent_items} total parent items")
+        
+        return unfiled_items
+        
+    except Exception as e:
+        logging.error(f"Failed to get unfiled items: {e}")
+        raise
+
+
 def get_collection_items(zot: zotero.Zotero, collection_key: str, recursive: bool = False) -> List[Dict[str, Any]]:
     """
     Get all parent items from a collection, optionally including subcollections.
@@ -446,8 +479,8 @@ def get_collection_items(zot: zotero.Zotero, collection_key: str, recursive: boo
         List of parent item dictionaries (excluding all child items like attachments and notes)
     """
     try:
-        # Get items directly in this collection
-        items = zot.collection_items(collection_key)
+        # Get items directly in this collection (handles pagination automatically)
+        items = zot.everything(zot.collection_items(collection_key))
         
         # Filter to get only parent items (items without a parentItem field)
         parent_items = [item for item in items if not item['data'].get('parentItem')]
@@ -456,7 +489,7 @@ def get_collection_items(zot: zotero.Zotero, collection_key: str, recursive: boo
         
         if recursive:
             # Get all collections to find subcollections
-            all_collections = zot.collections()
+            all_collections = zot.everything(zot.collections())
             subcollections = [
                 col for col in all_collections 
                 if col['data'].get('parentCollection') == collection_key

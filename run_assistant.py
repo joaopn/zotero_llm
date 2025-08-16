@@ -48,6 +48,12 @@ def parse_arguments():
     )
     
     parser.add_argument(
+        '--unfiled',
+        action='store_true',
+        help='Process unfiled items (items not assigned to any collection)'
+    )
+    
+    parser.add_argument(
         '--query',
         help='Search query to find items'
     )
@@ -124,51 +130,73 @@ def main_cli():
                 print(f"{args.task} completed for item: {result['title']}")
             
         elif args.object_type == 'collection':
-            if not args.collection_path:
-                print(f"Error: --collection-path required for collection {args.task} task")
-                sys.exit(1)
-            
-            # Process multiple collections with the specified task
-            all_results = tasks.analyze_multiple_collections(zot, args.collection_path, config, args.skip_analyzed, args.task)
-            
-            # Print overall summary
-            total_items = sum(result['total_items'] for result in all_results)
-            total_successful = sum(result['successful_analyses'] for result in all_results)
-            total_failed = sum(result['failed_analyses'] for result in all_results)
-            total_skipped = sum(result['skipped_analyses'] for result in all_results)
-            
-            print(f"\nMultiple Collections {args.task} Summary:")
-            print(f"  Collections Processed: {len(args.collection_path)}")
-            print(f"  Total Items: {total_items}")
-            print(f"  Successfully Processed: {total_successful}")
-            print(f"  Failed: {total_failed}")
-            print(f"  Skipped Items: {total_skipped}")
-            
-            # Print per-collection breakdown
-            print(f"\nPer-Collection Breakdown:")
-            for result in all_results:
-                print(f"  {result['collection_path']}: {result['successful_analyses']}/{result['total_items']} processed")
-            
-            # Aggregate skip/fail information
-            all_skipped_no_fulltext = []
-            all_failed_items = []
-            
-            for result in all_results:
+            if args.unfiled:
+                # Process unfiled items
+                result = tasks.analyze_unfiled_items(zot, config, args.skip_analyzed, args.task)
+                
+                # Print summary
+                print(f"\nUnfiled Items {args.task} Summary:")
+                print(f"  Total Items: {result['total_items']}")
+                print(f"  Successfully Processed: {result['successful_analyses']}")
+                print(f"  Failed: {result['failed_analyses']}")
+                print(f"  Skipped Items: {result['skipped_analyses']}")
+                
+                # Print detailed skip/fail information
                 if result.get('skipped_no_fulltext'):
-                    all_skipped_no_fulltext.extend(result['skipped_no_fulltext'])
+                    print(f"\nItems skipped (no fulltext):")
+                    for title in result['skipped_no_fulltext']:
+                        print(f"  - {title}")
+                        
                 if result.get('failed_items'):
-                    all_failed_items.extend(result['failed_items'])
-            
-            # Print detailed skip/fail information
-            if all_skipped_no_fulltext:
-                print(f"\nItems skipped (no fulltext):")
-                for title in all_skipped_no_fulltext:
-                    print(f"  - {title}")
-                    
-            if all_failed_items:
-                print(f"\nItems that failed:")
-                for item_error in all_failed_items:
-                    print(f"  - {item_error}")
+                    print(f"\nItems that failed:")
+                    for item_error in result['failed_items']:
+                        print(f"  - {item_error}")
+                        
+            elif args.collection_path:
+                # Process multiple collections with the specified task
+                all_results = tasks.analyze_multiple_collections(zot, args.collection_path, config, args.skip_analyzed, args.task)
+                
+                # Print overall summary
+                total_items = sum(result['total_items'] for result in all_results)
+                total_successful = sum(result['successful_analyses'] for result in all_results)
+                total_failed = sum(result['failed_analyses'] for result in all_results)
+                total_skipped = sum(result['skipped_analyses'] for result in all_results)
+                
+                print(f"\nMultiple Collections {args.task} Summary:")
+                print(f"  Collections Processed: {len(args.collection_path)}")
+                print(f"  Total Items: {total_items}")
+                print(f"  Successfully Processed: {total_successful}")
+                print(f"  Failed: {total_failed}")
+                print(f"  Skipped Items: {total_skipped}")
+                
+                # Print per-collection breakdown
+                print(f"\nPer-Collection Breakdown:")
+                for result in all_results:
+                    print(f"  {result['collection_path']}: {result['successful_analyses']}/{result['total_items']} processed")
+                
+                # Aggregate skip/fail information
+                all_skipped_no_fulltext = []
+                all_failed_items = []
+                
+                for result in all_results:
+                    if result.get('skipped_no_fulltext'):
+                        all_skipped_no_fulltext.extend(result['skipped_no_fulltext'])
+                    if result.get('failed_items'):
+                        all_failed_items.extend(result['failed_items'])
+                
+                # Print detailed skip/fail information
+                if all_skipped_no_fulltext:
+                    print(f"\nItems skipped (no fulltext):")
+                    for title in all_skipped_no_fulltext:
+                        print(f"  - {title}")
+                        
+                if all_failed_items:
+                    print(f"\nItems that failed:")
+                    for item_error in all_failed_items:
+                        print(f"  - {item_error}")
+            else:
+                print(f"Error: --collection-path or --unfiled required for collection {args.task} task")
+                sys.exit(1)
                 
         else:
             print(f"Unknown object type: {args.object_type}")
