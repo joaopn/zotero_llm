@@ -26,7 +26,7 @@ def parse_arguments():
     
     parser.add_argument(
         'task',
-        choices=['llm_summary', 'key_references', 'missing_pdf'],
+        choices=['llm_summary', 'key_references', 'missing_pdf', 'summary_qa'],
         help='Task to perform'
     )
     
@@ -57,6 +57,25 @@ def parse_arguments():
     parser.add_argument(
         '--query',
         help='Search query to find items'
+    )
+    
+    parser.add_argument(
+        '--question',
+        help='Question to ask when using summary_qa task'
+    )
+    
+    parser.add_argument(
+        '--references',
+        action='store_true',
+        default=True,
+        help='Include Key References with summaries in summary_qa (default: True)'
+    )
+    
+    parser.add_argument(
+        '--no-references',
+        dest='references',
+        action='store_false',
+        help='Do not include Key References with summaries in summary_qa'
     )
     
     parser.add_argument(
@@ -109,6 +128,14 @@ def main_cli():
             if not args.object_type:
                 print(f"Error: object type (item or collection) required for {args.task} task")
                 sys.exit(1)
+        elif args.task == 'summary_qa':
+            # summary_qa only works on collections
+            if not args.object_type or args.object_type != 'collection':
+                print(f"Error: summary_qa task only works on collections")
+                sys.exit(1)
+            if not args.question:
+                print(f"Error: --question required for summary_qa task")
+                sys.exit(1)
         
         # Execute task based on arguments
         if args.object_type == 'item':
@@ -160,47 +187,86 @@ def main_cli():
                         print(f"  - {item_error}")
                         
             elif args.collection_path:
-                # Process multiple collections with the specified task
-                all_results = tasks.analyze_multiple_collections(zot, args.collection_path, config, args.skip_analyzed, args.task)
-                
-                # Print overall summary
-                total_items = sum(result['total_items'] for result in all_results)
-                total_successful = sum(result['successful_analyses'] for result in all_results)
-                total_failed = sum(result['failed_analyses'] for result in all_results)
-                total_skipped = sum(result['skipped_analyses'] for result in all_results)
-                
-                print(f"\nMultiple Collections {args.task} Summary:")
-                print(f"  Collections Processed: {len(args.collection_path)}")
-                print(f"  Total Items: {total_items}")
-                print(f"  Successfully Processed: {total_successful}")
-                print(f"  Failed: {total_failed}")
-                print(f"  Skipped Items: {total_skipped}")
-                
-                # Print per-collection breakdown
-                print(f"\nPer-Collection Breakdown:")
-                for result in all_results:
-                    print(f"  {result['collection_path']}: {result['successful_analyses']}/{result['total_items']} processed")
-                
-                # Aggregate skip/fail information
-                all_skipped_no_fulltext = []
-                all_failed_items = []
-                
-                for result in all_results:
-                    if result.get('skipped_no_fulltext'):
-                        all_skipped_no_fulltext.extend(result['skipped_no_fulltext'])
-                    if result.get('failed_items'):
-                        all_failed_items.extend(result['failed_items'])
-                
-                # Print detailed skip/fail information
-                if all_skipped_no_fulltext:
-                    print(f"\nItems skipped (no fulltext):")
-                    for title in all_skipped_no_fulltext:
-                        print(f"  - {title}")
-                        
-                if all_failed_items:
-                    print(f"\nItems that failed:")
-                    for item_error in all_failed_items:
-                        print(f"  - {item_error}")
+                if args.task == 'summary_qa':
+                    # Handle summary_qa task separately since it has different signature
+                    if len(args.collection_path) > 1:
+                        print(f"Error: summary_qa task can only process one collection at a time")
+                        sys.exit(1)
+                    
+                    collection_path = args.collection_path[0]
+                    result = tasks.summary_qa_collection(zot, collection_path, args.question, config, args.references)
+                    
+                    # Print summary_qa results
+                    print(f"\nSummary Q&A Results for Collection: {result['collection_path']}")
+                    print(f"  Question: {result['question']}")
+                    print(f"  Total Items: {result['total_items']}")
+                    print(f"  Items with Summaries: {result['items_with_summaries']}")
+                    print(f"  Items with References: {result['items_with_references']}")
+                    
+                    # Print note creation status
+                    if result.get('note_created'):
+                        print(f"\n✅ QA Note Created:")
+                        print(f"  Title: {result.get('qa_title', 'QA Response')}")
+                        print(f"  Note Key: {result.get('note_key')}")
+                        print(f"  Location: '#LLM QA' collection")
+                        print(f"  Source: Collection '{result['collection_path']}'")
+                        print(f"  Tag: llm_qa")
+                    else:
+                        print(f"\n❌ Failed to create QA note:")
+                        print(f"  Error: {result.get('note_error', 'Unknown error')}")
+                        print(f"\nAnswer preview (first 500 chars):")
+                        answer_preview = result.get('answer', '')[:500]
+                        if len(result.get('answer', '')) > 500:
+                            answer_preview += "..."
+                        print(f"{answer_preview}")
+                    
+                    # Print items processed/skipped if any
+                    if result.get('items_skipped'):
+                        print(f"\nItems skipped:")
+                        for item in result['items_skipped']:
+                            print(f"  - {item['title']} ({item['reason']})")
+                else:
+                    # Process multiple collections with the specified task
+                    all_results = tasks.analyze_multiple_collections(zot, args.collection_path, config, args.skip_analyzed, args.task)
+                    
+                    # Print overall summary
+                    total_items = sum(result['total_items'] for result in all_results)
+                    total_successful = sum(result['successful_analyses'] for result in all_results)
+                    total_failed = sum(result['failed_analyses'] for result in all_results)
+                    total_skipped = sum(result['skipped_analyses'] for result in all_results)
+                    
+                    print(f"\nMultiple Collections {args.task} Summary:")
+                    print(f"  Collections Processed: {len(args.collection_path)}")
+                    print(f"  Total Items: {total_items}")
+                    print(f"  Successfully Processed: {total_successful}")
+                    print(f"  Failed: {total_failed}")
+                    print(f"  Skipped Items: {total_skipped}")
+                    
+                    # Print per-collection breakdown
+                    print(f"\nPer-Collection Breakdown:")
+                    for result in all_results:
+                        print(f"  {result['collection_path']}: {result['successful_analyses']}/{result['total_items']} processed")
+                    
+                    # Aggregate skip/fail information
+                    all_skipped_no_fulltext = []
+                    all_failed_items = []
+                    
+                    for result in all_results:
+                        if result.get('skipped_no_fulltext'):
+                            all_skipped_no_fulltext.extend(result['skipped_no_fulltext'])
+                        if result.get('failed_items'):
+                            all_failed_items.extend(result['failed_items'])
+                    
+                    # Print detailed skip/fail information
+                    if all_skipped_no_fulltext:
+                        print(f"\nItems skipped (no fulltext):")
+                        for title in all_skipped_no_fulltext:
+                            print(f"  - {title}")
+                            
+                    if all_failed_items:
+                        print(f"\nItems that failed:")
+                        for item_error in all_failed_items:
+                            print(f"  - {item_error}")
             else:
                 print(f"Error: --collection-path or --unfiled required for collection {args.task} task")
                 sys.exit(1)

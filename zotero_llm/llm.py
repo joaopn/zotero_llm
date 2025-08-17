@@ -57,6 +57,7 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
     top_p = llm_config.get('top_p')
     top_k = llm_config.get('top_k')
     min_p = llm_config.get('min_p')
+    timeout = llm_config.get('timeout')
     
     # Model is always required
     if not model:
@@ -86,14 +87,14 @@ def call_llm(prompt: str, config: Dict[str, Any]) -> str:
     
     # Provider-specific API handling
     if provider == 'anthropic':
-        return _call_anthropic_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
+        return _call_anthropic_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p, timeout)
     elif provider == 'openrouter':
-        return _call_openrouter_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
+        return _call_openrouter_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p, timeout)
     else:
-        return _call_openai_compatible_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p)
+        return _call_openai_compatible_api(prompt, base_url, model, api_key, max_tokens, temperature, top_p, top_k, min_p, timeout)
 
 
-def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float) -> str:
+def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float, timeout: int = None) -> str:
     """Call OpenAI-compatible API (used by OpenAI, LM Studio, Ollama)"""
     try:
         headers = {
@@ -129,11 +130,14 @@ def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key:
         
         logging.info(f"Making OpenAI-compatible API call to: {api_url}")
         
+        # Use configured timeout or default to 60 seconds
+        request_timeout = timeout if timeout is not None else 60
+        
         response = requests.post(
             api_url,
             headers=headers,
             json=data,
-            timeout=60
+            timeout=request_timeout
         )
         response.raise_for_status()
         
@@ -164,7 +168,7 @@ def _call_openai_compatible_api(prompt: str, base_url: str, model: str, api_key:
         raise
 
 
-def _call_openrouter_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float) -> str:
+def _call_openrouter_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float, timeout: int = None) -> str:
     """Call OpenRouter API (OpenAI-compatible with extra headers)"""
     try:
         headers = {
@@ -194,11 +198,14 @@ def _call_openrouter_api(prompt: str, base_url: str, model: str, api_key: str, m
         api_url = f"{base_url}/chat/completions"
         logging.info(f"Making OpenRouter API call to: {api_url}")
         
+        # Use configured timeout or default to 120 seconds for OpenRouter
+        request_timeout = timeout if timeout is not None else 120
+        
         response = requests.post(
             api_url,
             headers=headers,
             json=data,
-            timeout=120  # OpenRouter may need more time for some models
+            timeout=request_timeout
         )
         response.raise_for_status()
         
@@ -229,7 +236,7 @@ def _call_openrouter_api(prompt: str, base_url: str, model: str, api_key: str, m
         raise
 
 
-def _call_anthropic_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float) -> str:
+def _call_anthropic_api(prompt: str, base_url: str, model: str, api_key: str, max_tokens: int, temperature: float, top_p: float, top_k: int, min_p: float, timeout: int = None) -> str:
     """Call Anthropic Claude API (different format)"""
     try:
         headers = {
@@ -257,11 +264,14 @@ def _call_anthropic_api(prompt: str, base_url: str, model: str, api_key: str, ma
         api_url = f"{base_url}/messages"
         logging.info(f"Making Anthropic API call to: {api_url}")
         
+        # Use configured timeout or default to 60 seconds
+        request_timeout = timeout if timeout is not None else 60
+        
         response = requests.post(
             api_url,
             headers=headers,
             json=data,
-            timeout=60
+            timeout=request_timeout
         )
         response.raise_for_status()
         

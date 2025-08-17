@@ -12,6 +12,8 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 - **Missing PDF** (`missing_pdf`): Database-level task that flags all items without PDF attachments by adding a "missing_pdf" tag. Also removes the flag from items that now have PDFs. Prints the names and collection paths of affected items.
 
+- **Summary Q&A** (`summary_qa`): Collection-level task that uses existing LLM summaries and optionally key references from all items in a collection to answer free-form questions. Creates a note in a dedicated "#LLM QA" collection (created automatically) with the question and answer. The LLM generates a short title for each Q&A note, with automatic duplicate handling. All QA notes receive an "llm_qa" tag for easy filtering. Requires items to have been previously processed with `llm_summary` task. This task automatically uses extended timeouts due to the complexity of multi-paper analysis.
+
 The analysis tasks automatically skip items with existing tags to prevent duplicates and require fulltext (PDFs) by default.
 
 ## Quick Start
@@ -32,6 +34,7 @@ The analysis tasks automatically skip items with existing tags to prevent duplic
      model: "local-model"     # Model name (REQUIRED)
      port: 1234               # Port for local provider (REQUIRED - 1234=LM Studio, 11434=Ollama)
      api_key: null            # Only needed for remote providers
+     timeout: 60              # Optional: API timeout in seconds (default: 60s for most, 120s for OpenRouter)
    ```
 
 3. **Start your LLM server** (for local provider):
@@ -86,6 +89,7 @@ python run_assistant.py [OPTIONS] TASK [OBJECT_TYPE] [TASK_OPTIONS]
 - `llm_summary` - Generate LLM analysis summary (requires object type)
 - `key_references` - Extract key references from paper (requires object type)  
 - `missing_pdf` - Flag items missing PDF attachments (database-level)
+- `summary_qa` - Answer questions using collection summaries (collection-level only)
 
 ### Common Flags
 - `-c, --config`: Configuration file path (default: `config.yaml`)
@@ -99,6 +103,9 @@ python run_assistant.py [OPTIONS] TASK [OBJECT_TYPE] [TASK_OPTIONS]
 - `--query "search term"`: Search for item by title/content
 - `--collection-path "path1" "path2" ...`: One or more hierarchical collection paths (supports subcollections)
 - `--unfiled`: Process all unfiled items (items not assigned to any collection)
+- `--question "question"`: Question to ask when using summary_qa task
+- `--references`: Include Key References with summaries in summary_qa (default: true)
+- `--no-references`: Do not include Key References with summaries in summary_qa
 
 ### Examples
 ```bash
@@ -135,6 +142,12 @@ python run_assistant.py llm_summary item --item-id ABC123
 
 # Database-level task: flag items missing PDFs
 python run_assistant.py missing_pdf
+
+# Answer questions using collection summaries (creates a note in "#LLM QA" collection)
+python run_assistant.py summary_qa collection --collection-path "Research/AI Papers" --question "What are the main limitations discussed in these papers?"
+
+# Answer questions without including key references (creates a note in "#LLM QA" collection)
+python run_assistant.py summary_qa collection --collection-path "Research/NLP" --question "What methods are most commonly used?" --no-references
 ```
 
 ## Credentials

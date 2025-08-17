@@ -593,3 +593,451 @@ def analyze_multiple_collections(zot, collection_paths: List[str], config: Dict[
     return results
 
 
+def summary_qa_collection(zot, collection_path: str, question: str, config: Dict[str, Any], include_references: bool = True) -> Dict[str, Any]:
+    """
+    Answer questions using LLM summaries and optionally key references from all items in a collection.
+    
+    Args:
+        zot: Zotero client instance
+        collection_path: Slash-separated path to the collection (e.g., 'a/b/c')
+        question: User question to answer
+        config: Configuration dictionary
+        include_references: If True, include Key References notes with summaries
+        
+    Returns:
+        Results dictionary with answer and metadata
+    """
+    try:
+        # Find the collection by path
+        collection_key = main.find_collection_by_path(zot, collection_path)
+        if not collection_key:
+            raise ValueError(f"Collection not found at path: {collection_path}")
+        
+        # Get all items from the collection and its subcollections
+        items = main.get_collection_items(zot, collection_key, recursive=True)
+        
+        if not items:
+            logging.warning(f"No items found in collection {collection_path}")
+            return {
+                'collection_path': collection_path,
+                'collection_key': collection_key,
+                'question': question,
+                'answer': "No items found in the specified collection.",
+                'total_items': 0,
+                'items_with_summaries': 0,
+                'items_with_references': 0,
+                'items_processed': [],
+                'items_skipped': []
+            }
+        
+        logging.info(f"Found {len(items)} items in collection {collection_path}")
+        
+        # Collect summaries and references from items
+        summaries_data = []
+        items_processed = []
+        items_skipped = []
+        
+        for item in items:
+            item_id = item.get('key')
+            title = item.get('data', {}).get('title', 'Unknown Title')
+            authors = item.get('data', {}).get('creators', [])
+            author_names = [f"{c.get('firstName', '')} {c.get('lastName', '')}" for c in authors]
+            
+            # Check if item has LLM summary tag
+            tags = item.get('data', {}).get('tags', [])
+            tag_names = [tag.get('tag', '').lower() for tag in tags]
+            has_summary = 'llm_summary' in tag_names
+            has_references = 'key_references' in tag_names
+            
+            if not has_summary:
+                logging.info(f"Skipping item without LLM summary: {title}")
+                items_skipped.append({
+                    'title': title,
+                    'item_id': item_id,
+                    'reason': 'No LLM summary available'
+                })
+                continue
+            
+            # Get LLM Summary note
+            summary_content = _get_note_content(zot, item_id, "LLM Summary")
+            if not summary_content:
+                logging.warning(f"LLM Summary tag found but no note content for: {title}")
+                items_skipped.append({
+                    'title': title,
+                    'item_id': item_id,
+                    'reason': 'LLM summary tag present but no note content found'
+                })
+                continue
+            
+            # Optionally get Key References note
+            references_content = ""
+            if include_references and has_references:
+                references_content = _get_note_content(zot, item_id, "Key References")
+                if not references_content:
+                    logging.info(f"Key References tag found but no note content for: {title}")
+            
+            # Add to summaries data
+            paper_data = {
+                'title': title,
+                'authors': ', '.join(author_names) if author_names else 'Unknown Authors',
+                'item_id': item_id,
+                'summary': summary_content,
+                'references': references_content if include_references else ""
+            }
+            summaries_data.append(paper_data)
+            items_processed.append({
+                'title': title,
+                'item_id': item_id,
+                'has_references': bool(references_content)
+            })
+            
+            logging.info(f"Collected data for: {title}")
+        
+        if not summaries_data:
+            return {
+                'collection_path': collection_path,
+                'collection_key': collection_key,
+                'question': question,
+                'answer': "No items with LLM summaries found in the collection. Please run 'llm_summary' task first.",
+                'total_items': len(items),
+                'items_with_summaries': 0,
+                'items_with_references': 0,
+                'items_processed': items_processed,
+                'items_skipped': items_skipped
+            }
+        
+        logging.info(f"Collected summaries from {len(summaries_data)} items, answering question...")
+        
+        # Generate the comprehensive prompt with all summaries
+        papers_text = _format_papers_for_qa(summaries_data, include_references)
+        qa_response = _answer_question_with_summaries(question, papers_text, config)
+        
+        # Extract title and answer from response
+        qa_title = qa_response["title"]
+        qa_answer = qa_response["answer"]
+        
+        # Create QA note using the simple, proven approach
+        model_name = config.get('llm', {}).get('model', 'Unknown Model')
+        note_created, note_result = create_qa_note_simple(
+            zot, collection_path, question, qa_title, qa_answer, model_name, summaries_data
+        )
+        
+        result = {
+            'collection_path': collection_path,
+            'collection_key': collection_key,
+            'question': question,
+            'answer': qa_answer,
+            'qa_title': qa_title,
+            'note_created': note_created,
+            'note_key': note_result if note_created else None,
+            'note_error': note_result if not note_created else None,
+            'total_items': len(items),
+            'items_with_summaries': len(summaries_data),
+            'items_with_references': len([p for p in summaries_data if p['references']]),
+            'items_processed': items_processed,
+            'items_skipped': items_skipped
+        }
+        
+        logging.info(f"Summary Q&A completed for collection {collection_path}: {len(summaries_data)} summaries processed")
+        return result
+        
+    except Exception as e:
+        logging.error(f"Failed to perform summary Q&A for collection '{collection_path}': {e}")
+        raise
+
+
+def _get_note_content(zot, item_id: str, note_title: str) -> str:
+    """
+    Get the content of a specific note by title for an item.
+    
+    Args:
+        zot: Zotero client instance
+        item_id: Zotero item ID
+        note_title: Title of the note to find (e.g., "LLM Summary", "Key References")
+        
+    Returns:
+        Note content as string, or empty string if not found
+    """
+    try:
+        # Get all children of this item
+        children = zot.children(item_id)
+        
+        # Find notes that match the title
+        for child in children:
+            if child.get('data', {}).get('itemType') == 'note':
+                note_content = child.get('data', {}).get('note', '')
+                # Check if this note has the right title (look for the title in HTML)
+                if f"<h2>{note_title}</h2>" in note_content:
+                    # Extract the content after the title and model info
+                    # Remove HTML tags and clean up
+                    import re
+                    # Remove HTML tags
+                    clean_content = re.sub(r'<[^>]+>', '', note_content)
+                    # Remove the title and model lines
+                    lines = clean_content.split('\n')
+                    content_lines = []
+                    skip_next = False
+                    for line in lines:
+                        line = line.strip()
+                        if line.startswith(note_title) or line.startswith('Model:'):
+                            skip_next = True
+                            continue
+                        if skip_next and not line:
+                            skip_next = False
+                            continue
+                        if not skip_next and line:
+                            content_lines.append(line)
+                        skip_next = False
+                    
+                    return '\n'.join(content_lines).strip()
+        
+        return ""
+        
+    except Exception as e:
+        logging.warning(f"Failed to get note content for item {item_id}: {e}")
+        return ""
+
+
+def _format_papers_for_qa(papers_data: List[Dict[str, Any]], include_references: bool) -> str:
+    """
+    Format papers data for the Q&A prompt.
+    
+    Args:
+        papers_data: List of paper dictionaries with title, authors, summary, references
+        include_references: Whether to include references in the output
+        
+    Returns:
+        Formatted string with all papers
+    """
+    formatted_papers = []
+    
+    for i, paper in enumerate(papers_data, 1):
+        paper_text = f"""
+Paper {i}: {paper['title']}
+Authors: {paper['authors']}
+
+LLM Summary:
+{paper['summary']}"""
+        
+        if include_references and paper['references']:
+            paper_text += f"""
+
+Key References:
+{paper['references']}"""
+        
+        formatted_papers.append(paper_text)
+    
+    return "\n\n" + "="*80 + "\n\n".join(formatted_papers)
+
+
+def _answer_question_with_summaries(question: str, papers_text: str, config: Dict[str, Any]) -> str:
+    """
+    Use LLM to answer a question based on the provided paper summaries.
+    
+    Args:
+        question: User's question
+        papers_text: Formatted text with all paper summaries
+        config: Configuration dictionary
+        
+    Returns:
+        LLM answer to the question
+    """
+    # Load prompts configuration
+    prompts_file = config.get('prompts_file', 'prompts.yaml')
+    prompts_config = main.load_prompts(prompts_file)
+    
+    # Get summary_qa prompt
+    task_prompt = prompts_config.get('tasks', {}).get('summary_qa', {}).get('prompt', '')
+    if not task_prompt:
+        raise ValueError("No prompt found for 'summary_qa' in the prompts configuration. Please check your prompts.yaml file.")
+    
+    # Prepare the full prompt
+    content_prompt = f"""
+{task_prompt}
+
+User Question: {question}
+
+Research Papers from Collection:
+{papers_text}
+
+Please answer the user's question based on the provided summaries and references."""
+    
+    # Check if the prompt exceeds the maximum length (if configured)
+    config_section = config.get('tasks', {}).get('summary_qa', {})
+    max_prompt_chars = config_section.get('max_prompt_chars')
+    
+    if max_prompt_chars is not None:
+        if len(content_prompt) > max_prompt_chars:
+            raise ValueError(
+                f"Prompt too large ({len(content_prompt):,} characters). "
+                f"Maximum allowed: {max_prompt_chars:,} characters. "
+                f"Either increase max_prompt_chars in config or process fewer papers."
+            )
+    
+    # Create a copy of config with enhanced timeout for summary_qa
+    qa_config = config.copy()
+    llm_config = qa_config.get('llm', {}).copy()
+    
+    # Set a longer timeout for summary_qa if not already configured
+    if 'timeout' not in llm_config:
+        # Use longer timeouts for complex Q&A tasks
+        current_timeout = llm_config.get('timeout', 60)
+        enhanced_timeout = max(current_timeout * 3, 180)  # At least 3 minutes
+        llm_config['timeout'] = enhanced_timeout
+        logging.info(f"Using enhanced timeout of {enhanced_timeout}s for summary_qa task")
+    
+    qa_config['llm'] = llm_config
+    
+    response = llm.call_llm(content_prompt, qa_config)
+    
+    # Parse the response to extract title and answer
+    title, answer = _parse_qa_response(response)
+    
+    return {"title": title, "answer": answer, "full_response": response}
+
+
+def _parse_qa_response(response: str) -> tuple[str, str]:
+    """
+    Parse the LLM response to extract title and answer.
+    
+    Args:
+        response: Full LLM response containing TITLE: and ANSWER: sections
+        
+    Returns:
+        Tuple of (title, answer)
+    """
+    try:
+        lines = response.strip().split('\n')
+        title = "QA Response"  # Default title
+        answer = response  # Default to full response
+        
+        title_found = False
+        answer_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('TITLE:'):
+                title = line.replace('TITLE:', '').strip()
+                title_found = True
+            elif line.startswith('ANSWER:'):
+                # Start collecting answer lines
+                continue
+            elif title_found:
+                # Collect all lines after ANSWER: as the answer
+                answer_lines.append(line)
+        
+        if answer_lines:
+            answer = '\n'.join(answer_lines).strip()
+        
+        # Clean up title - remove any unwanted characters and limit length
+        title = title.replace('"', '').replace("'", "").strip()
+        if len(title) > 50:
+            title = title[:47] + "..."
+        
+        return title, answer
+        
+    except Exception as e:
+        logging.warning(f"Failed to parse QA response format: {e}")
+        # Fallback to using response as answer and default title
+        return "QA Response", response
+
+
+def find_or_create_collection(zot, collection_name: str) -> tuple[bool, str]:
+    """
+    Generic function to find or create a collection by name.
+    
+    Args:
+        zot: Zotero client instance
+        collection_name: Name of the collection to find or create
+        
+    Returns:
+        Tuple of (success, collection_key or error_message)
+    """
+    try:
+        # Get all collections
+        all_collections = zot.everything(zot.collections())
+        
+        # Look for existing collection
+        for collection in all_collections:
+            if collection.get('data', {}).get('name') == collection_name:
+                collection_key = collection.get('key')
+                logging.info(f"Found existing '{collection_name}' collection with key: {collection_key}")
+                return True, collection_key
+        
+        # Collection doesn't exist, create it
+        logging.info(f"Creating new '{collection_name}' collection")
+        
+        collection_data = {"name": collection_name}
+        result = zot.create_collections([collection_data])
+        logging.debug(f"Collection creation result: {result}")
+        
+        if result and "success" in result and result["success"]:
+            collection_key = next(iter(result["success"].keys()))
+            logging.info(f"Created '{collection_name}' collection with key: {collection_key}")
+            return True, collection_key
+        elif result and "successful" in result and result["successful"]:
+            collection_key = next(iter(result["successful"].keys()))
+            logging.info(f"Created '{collection_name}' collection with key: {collection_key}")
+            return True, collection_key
+        else:
+            error_msg = f"Failed to create '{collection_name}' collection: {result}"
+            logging.error(error_msg)
+            return False, error_msg
+            
+    except Exception as e:
+        error_msg = f"Error finding/creating '{collection_name}' collection: {e}"
+        logging.error(error_msg)
+        return False, error_msg
+
+
+def create_qa_note_simple(zot, source_collection_path: str, question: str, title: str, answer: str, model_name: str, papers_data: List[Dict[str, Any]]) -> tuple[bool, str]:
+    """
+    Create a QA note. SIMPLE VERSION.
+    """
+    try:
+        # Find or create the '#LLM QA' collection
+        qa_collection_success, qa_collection_key = find_or_create_collection(zot, "#LLM QA")
+        if not qa_collection_success:
+            return False, f"Failed to create collection: {qa_collection_key}"
+        
+        # Generate papers list
+        papers_list = "\n".join([
+            f"{i}. {paper['title']} ({paper['authors']})"
+            for i, paper in enumerate(papers_data, 1)
+        ])
+        
+        # Create the note content
+        unique_title = f"{source_collection_path}: {title}"
+        content = f"""<h2>{unique_title}</h2>
+<p><strong>Model:</strong> {model_name}</p>
+<p><strong>Source Collection:</strong> {source_collection_path}</p>
+<p><strong>Question:</strong> {question}</p>
+<p><strong>Answer:</strong></p>
+<pre>{answer}</pre>
+
+<p><strong>Papers Analyzed ({len(papers_data)} total):</strong></p>
+<pre>{papers_list}</pre>"""
+        
+        # Create note directly with Zotero API
+        note_data = {
+            "itemType": "note",
+            "note": content,
+            "tags": [{"tag": "llm_qa"}],
+            "collections": [qa_collection_key]
+        }
+        
+        result = zot.create_items([note_data])
+        
+        if result and "success" in result and result["success"]:
+            note_key = next(iter(result["success"].keys()))
+            logging.info(f"Created QA note '{unique_title}' (key: {note_key})")
+            return True, note_key
+        else:
+            logging.error(f"Note creation failed: {result}")
+            return False, f"API returned: {result}"
+            
+    except Exception as e:
+        logging.error(f"Error creating QA note: {e}")
+        return False, str(e)
+
+
