@@ -942,6 +942,50 @@ def _parse_qa_response(response: str) -> tuple[str, str]:
         return "QA Response", response
 
 
+def get_all_collection_paths(zot) -> List[str]:
+    """
+    Get all collection paths in hierarchical format, reusing existing logic.
+    
+    Args:
+        zot: Zotero client instance
+        
+    Returns:
+        List of collection paths (e.g., ['Research/AI', 'Papers/NLP', 'Books'])
+    """
+    try:
+        # Get all collections using existing function
+        all_collections = main.get_collections(zot)
+        
+        # Build paths using the same logic as get_item_collections
+        collections_by_key = {col['key']: col for col in all_collections}
+        collection_paths = []
+        
+        for collection in all_collections:
+            # Build full path using existing logic pattern
+            path_parts = []
+            current_collection = collection
+            
+            while current_collection:
+                path_parts.insert(0, current_collection['data'].get('name', 'Unknown'))
+                parent_key = current_collection['data'].get('parentCollection')
+                current_collection = collections_by_key.get(parent_key) if parent_key else None
+            
+            collection_paths.append('/'.join(path_parts))
+        
+        # Filter out the #LLM QA collection to avoid processing Q&A notes
+        collection_paths = [path for path in collection_paths if path != "#LLM QA"]
+        
+        # Sort for consistent ordering
+        collection_paths.sort()
+        
+        logging.info(f"Found {len(collection_paths)} collections (excluding #LLM QA)")
+        return collection_paths
+        
+    except Exception as e:
+        logging.error(f"Failed to get all collection paths: {e}")
+        return []
+
+
 def find_or_create_collection(zot, collection_name: str) -> tuple[bool, str]:
     """
     Generic function to find or create a collection by name.

@@ -103,6 +103,7 @@ python run_assistant.py [OPTIONS] TASK [OBJECT_TYPE] [TASK_OPTIONS]
 - `--query "search term"`: Search for item by title/content
 - `--collection-path "path1" "path2" ...`: One or more hierarchical collection paths (supports subcollections)
 - `--unfiled`: Process all unfiled items (items not assigned to any collection)
+- `--all-collections`: Process all collections in the library (collection-level tasks only)
 - `--question "question"`: Question to ask when using summary_qa task
 - `--references`: Include Key References with summaries in summary_qa (default: true)
 - `--no-references`: Do not include Key References with summaries in summary_qa
@@ -124,8 +125,14 @@ python run_assistant.py llm_summary collection --collection-path "Research/AI Pa
 # Process all unfiled items (items not in any collection)
 python run_assistant.py llm_summary collection --unfiled
 
+# Process ALL collections in the library
+python run_assistant.py llm_summary collection --all-collections
+
 # Extract key references from unfiled items only
 python run_assistant.py key_references collection --unfiled
+
+# Extract key references from ALL collections
+python run_assistant.py key_references collection --all-collections
 
 # Process single item by search query
 python run_assistant.py llm_summary item --query "attention mechanism"

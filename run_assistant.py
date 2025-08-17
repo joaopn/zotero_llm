@@ -55,6 +55,12 @@ def parse_arguments():
     )
     
     parser.add_argument(
+        '--all-collections',
+        action='store_true',
+        help='Process all collections in the library (collection-level tasks only)'
+    )
+    
+    parser.add_argument(
         '--query',
         help='Search query to find items'
     )
@@ -164,7 +170,87 @@ def main_cli():
                 print(f"{args.task} completed for item: {result['title']}")
             
         elif args.object_type == 'collection':
-            if args.unfiled:
+            if args.all_collections:
+                # Get all collection paths
+                all_collection_paths = tasks.get_all_collection_paths(zot)
+                if not all_collection_paths:
+                    print(f"No collections found in library")
+                    sys.exit(1)
+                
+                if args.task == 'summary_qa':
+                    # For summary_qa, process each collection individually
+                    total_successful_qa = 0
+                    total_failed_qa = 0
+                    qa_results = []
+                    
+                    for i, collection_path in enumerate(all_collection_paths, 1):
+                        print(f"\nProcessing collection {i}/{len(all_collection_paths)}: {collection_path}")
+                        try:
+                            result = tasks.summary_qa_collection(zot, collection_path, args.question, config, args.references)
+                            qa_results.append(result)
+                            
+                            if result.get('note_created'):
+                                total_successful_qa += 1
+                                print(f"✅ Created QA note: {result.get('qa_title', 'Unknown')}")
+                            else:
+                                total_failed_qa += 1
+                                print(f"❌ Failed: {result.get('note_error', 'Unknown error')}")
+                                
+                        except Exception as e:
+                            total_failed_qa += 1
+                            print(f"❌ Failed to process collection {collection_path}: {e}")
+                    
+                    # Print overall summary for summary_qa
+                    print(f"\nSummary Q&A Results for All Collections:")
+                    print(f"  Total Collections: {len(all_collection_paths)}")
+                    print(f"  Successful Q&A Notes: {total_successful_qa}")
+                    print(f"  Failed: {total_failed_qa}")
+                    print(f"  Question: {args.question}")
+                    
+                    sys.exit(0)  # Exit early since we handled summary_qa specially
+                
+                # Process all collections using existing multi-collection logic
+                all_results = tasks.analyze_multiple_collections(zot, all_collection_paths, config, args.skip_analyzed, args.task)
+                
+                # Print overall summary (reusing existing code)
+                total_items = sum(result['total_items'] for result in all_results)
+                total_successful = sum(result['successful_analyses'] for result in all_results)
+                total_failed = sum(result['failed_analyses'] for result in all_results)
+                total_skipped = sum(result['skipped_analyses'] for result in all_results)
+                
+                print(f"\nAll Collections {args.task} Summary:")
+                print(f"  Collections Processed: {len(all_collection_paths)}")
+                print(f"  Total Items: {total_items}")
+                print(f"  Successfully Processed: {total_successful}")
+                print(f"  Failed: {total_failed}")
+                print(f"  Skipped Items: {total_skipped}")
+                
+                # Print per-collection breakdown
+                print(f"\nPer-Collection Breakdown:")
+                for result in all_results:
+                    print(f"  {result['collection_path']}: {result['successful_analyses']}/{result['total_items']} processed")
+                
+                # Aggregate skip/fail information
+                all_skipped_no_fulltext = []
+                all_failed_items = []
+                
+                for result in all_results:
+                    if result.get('skipped_no_fulltext'):
+                        all_skipped_no_fulltext.extend(result['skipped_no_fulltext'])
+                    if result.get('failed_items'):
+                        all_failed_items.extend(result['failed_items'])
+                
+                # Print detailed skip/fail information
+                if all_skipped_no_fulltext:
+                    print(f"\nItems skipped (no fulltext):")
+                    for title in all_skipped_no_fulltext:
+                        print(f"  - {title}")
+                        
+                if all_failed_items:
+                    print(f"\nItems that failed:")
+                    for item_error in all_failed_items:
+                        print(f"  - {item_error}")
+            elif args.unfiled:
                 # Process unfiled items
                 result = tasks.analyze_unfiled_items(zot, config, args.skip_analyzed, args.task)
                 
@@ -268,7 +354,7 @@ def main_cli():
                         for item_error in all_failed_items:
                             print(f"  - {item_error}")
             else:
-                print(f"Error: --collection-path or --unfiled required for collection {args.task} task")
+                print(f"Error: --collection-path, --unfiled, or --all-collections required for collection {args.task} task")
                 sys.exit(1)
                 
         elif args.object_type:
