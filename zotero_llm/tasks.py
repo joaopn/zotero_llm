@@ -972,13 +972,13 @@ def get_all_collection_paths(zot) -> List[str]:
             
             collection_paths.append('/'.join(path_parts))
         
-        # Filter out the #LLM QA collection to avoid processing Q&A notes
-        collection_paths = [path for path in collection_paths if path != "#LLM QA"]
+        # Filter out the #LLM QA collection and all its subcollections to avoid processing Q&A notes
+        collection_paths = [path for path in collection_paths if not path.startswith("#LLM QA")]
         
         # Sort for consistent ordering
         collection_paths.sort()
         
-        logging.info(f"Found {len(collection_paths)} collections (excluding #LLM QA)")
+        logging.info(f"Found {len(collection_paths)} collections (excluding #LLM QA and subcollections)")
         return collection_paths
         
     except Exception as e:
@@ -986,50 +986,91 @@ def get_all_collection_paths(zot) -> List[str]:
         return []
 
 
-def find_or_create_collection(zot, collection_name: str) -> tuple[bool, str]:
+def find_or_create_collection(zot, collection_path: str) -> tuple[bool, str]:
     """
-    Generic function to find or create a collection by name.
+    Generic function to find or create a collection by path.
+    Supports both simple names ("MyCollection") and paths ("#LLM QA/Complex Networks").
     
     Args:
         zot: Zotero client instance
-        collection_name: Name of the collection to find or create
+        collection_path: Name or path of the collection to find or create
         
     Returns:
         Tuple of (success, collection_key or error_message)
     """
     try:
+        # Split path into parts
+        path_parts = [part.strip() for part in collection_path.strip('/').split('/') if part.strip()]
+        if not path_parts:
+            return False, "Empty collection path provided"
+        
         # Get all collections
         all_collections = zot.everything(zot.collections())
+        collections_by_key = {col['key']: col for col in all_collections}
         
-        # Look for existing collection
-        for collection in all_collections:
-            if collection.get('data', {}).get('name') == collection_name:
-                collection_key = collection.get('key')
-                logging.info(f"Found existing '{collection_name}' collection with key: {collection_key}")
-                return True, collection_key
+        # Start with top-level collections
+        current_collections = [col for col in all_collections if not col['data'].get('parentCollection')]
+        parent_key = None
         
-        # Collection doesn't exist, create it
-        logging.info(f"Creating new '{collection_name}' collection")
+        # Navigate/create through the path
+        for i, part in enumerate(path_parts):
+            # Look for existing collection at current level
+            found_collection = None
+            for col in current_collections:
+                if col['data'].get('name') == part:
+                    found_collection = col
+                    break
+            
+            if found_collection:
+                # Collection exists, use it
+                collection_key = found_collection['key']
+                logging.info(f"Found existing collection '{part}' with key: {collection_key}")
+                
+                if i == len(path_parts) - 1:
+                    # This is the final collection we want
+                    return True, collection_key
+                
+                # Move to subcollections for next iteration
+                parent_key = collection_key
+                current_collections = [
+                    col for col in all_collections 
+                    if col['data'].get('parentCollection') == parent_key
+                ]
+            else:
+                # Collection doesn't exist, create it
+                logging.info(f"Creating new collection '{part}'" + 
+                           (f" under parent {parent_key}" if parent_key else " at top level"))
+                
+                collection_data = {"name": part}
+                if parent_key:
+                    collection_data["parentCollection"] = parent_key
+                
+                result = zot.create_collections([collection_data])
+                logging.debug(f"Collection creation result: {result}")
+                
+                if result and "success" in result and result["success"]:
+                    collection_key = next(iter(result["success"].keys()))
+                    logging.info(f"Created collection '{part}' with key: {collection_key}")
+                elif result and "successful" in result and result["successful"]:
+                    collection_key = next(iter(result["successful"].keys()))
+                    logging.info(f"Created collection '{part}' with key: {collection_key}")
+                else:
+                    error_msg = f"Failed to create collection '{part}': {result}"
+                    logging.error(error_msg)
+                    return False, error_msg
+                
+                if i == len(path_parts) - 1:
+                    # This is the final collection we want
+                    return True, collection_key
+                
+                # Set up for next iteration
+                parent_key = collection_key
+                current_collections = []  # No subcollections exist yet for newly created collection
         
-        collection_data = {"name": collection_name}
-        result = zot.create_collections([collection_data])
-        logging.debug(f"Collection creation result: {result}")
-        
-        if result and "success" in result and result["success"]:
-            collection_key = next(iter(result["success"].keys()))
-            logging.info(f"Created '{collection_name}' collection with key: {collection_key}")
-            return True, collection_key
-        elif result and "successful" in result and result["successful"]:
-            collection_key = next(iter(result["successful"].keys()))
-            logging.info(f"Created '{collection_name}' collection with key: {collection_key}")
-            return True, collection_key
-        else:
-            error_msg = f"Failed to create '{collection_name}' collection: {result}"
-            logging.error(error_msg)
-            return False, error_msg
+        return False, "Unexpected end of path processing"
             
     except Exception as e:
-        error_msg = f"Error finding/creating '{collection_name}' collection: {e}"
+        error_msg = f"Error finding/creating collection '{collection_path}': {e}"
         logging.error(error_msg)
         return False, error_msg
 
@@ -1039,10 +1080,18 @@ def create_qa_note_simple(zot, source_collection_path: str, question: str, title
     Create a QA note. SIMPLE VERSION.
     """
     try:
-        # Find or create the '#LLM QA' collection
-        qa_collection_success, qa_collection_key = find_or_create_collection(zot, "#LLM QA")
-        if not qa_collection_success:
-            return False, f"Failed to create collection: {qa_collection_key}"
+        # Extract top-level collection name from source path
+        path_parts = [part.strip() for part in source_collection_path.strip('/').split('/') if part.strip()]
+        if not path_parts:
+            return False, "Invalid source collection path: empty or invalid"
+        
+        top_level_collection = path_parts[0]
+        target_collection_path = f"#LLM QA/{top_level_collection}"
+        
+        # Find or create the target collection (will create both #LLM QA and subcollection as needed)
+        collection_success, target_collection_key = find_or_create_collection(zot, target_collection_path)
+        if not collection_success:
+            return False, f"Failed to create collection: {target_collection_key}"
         
         # Generate papers list
         papers_list = "\n".join([
@@ -1067,7 +1116,7 @@ def create_qa_note_simple(zot, source_collection_path: str, question: str, title
             "itemType": "note",
             "note": content,
             "tags": [{"tag": "llm_qa"}],
-            "collections": [qa_collection_key]
+            "collections": [target_collection_key]
         }
         
         result = zot.create_items([note_data])

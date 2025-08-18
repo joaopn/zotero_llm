@@ -12,7 +12,7 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 - **Missing PDF** (`missing_pdf`): Database-level task that flags all items without PDF attachments by adding a "missing_pdf" tag. Also removes the flag from items that now have PDFs. Prints the names and collection paths of affected items.
 
-- **Summary Q&A** (`summary_qa`): Collection-level task that uses existing LLM summaries and optionally key references from all items in a collection to answer free-form questions. Creates a note in a dedicated "#LLM QA" collection (created automatically) with the question and answer. The LLM generates a short title for each Q&A note, with automatic duplicate handling. All QA notes receive an "llm_qa" tag for easy filtering. Requires items to have been previously processed with `llm_summary` task. This task automatically uses extended timeouts due to the complexity of multi-paper analysis.
+- **Summary Q&A** (`summary_qa`): Collection-level task that uses existing LLM summaries and optionally key references from all items in a collection to answer free-form questions. Creates a note in a dedicated "#LLM QA" collection structure (created automatically) with the question and answer. Notes are organized into subcollections based on the top-level collection of the source (e.g., notes from "Complex Networks/Scaling laws" go into "#LLM QA/Complex Networks"). All QA notes receive an "llm_qa" tag for easy filtering. Requires items to have been previously processed with `llm_summary` task. This task automatically uses extended timeouts due to the complexity of multi-paper analysis.
 
 The analysis tasks automatically skip items with existing tags to prevent duplicates and require fulltext (PDFs) by default.
 
@@ -150,10 +150,10 @@ python run_assistant.py llm_summary item --item-id ABC123
 # Database-level task: flag items missing PDFs
 python run_assistant.py missing_pdf
 
-# Answer questions using collection summaries (creates a note in "#LLM QA" collection)
+# Answer questions using collection summaries (creates a note in "#LLM QA/[TopLevelCollection]" subcollection)
 python run_assistant.py summary_qa collection --collection-path "Research/AI Papers" --question "What are the main limitations discussed in these papers?"
 
-# Answer questions without including key references (creates a note in "#LLM QA" collection)
+# Answer questions without including key references (creates a note in "#LLM QA/[TopLevelCollection]" subcollection)
 python run_assistant.py summary_qa collection --collection-path "Research/NLP" --question "What methods are most commonly used?" --no-references
 ```
 

@@ -291,10 +291,15 @@ def main_cli():
                     
                     # Print note creation status
                     if result.get('note_created'):
+                        # Extract top-level collection for display
+                        source_path = result['collection_path']
+                        path_parts = [part.strip() for part in source_path.strip('/').split('/') if part.strip()]
+                        top_level_collection = path_parts[0] if path_parts else "Unknown"
+                        
                         print(f"\n✅ QA Note Created:")
                         print(f"  Title: {result.get('qa_title', 'QA Response')}")
                         print(f"  Note Key: {result.get('note_key')}")
-                        print(f"  Location: '#LLM QA' collection")
+                        print(f"  Location: '#LLM QA/{top_level_collection}' collection")
                         print(f"  Source: Collection '{result['collection_path']}'")
                         print(f"  Tag: llm_qa")
                     else:
