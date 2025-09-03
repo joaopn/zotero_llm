@@ -398,6 +398,58 @@ def analyze_unfiled_items(zot, config: Dict[str, Any], skip_analyzed: bool = Fal
         raise
 
 
+def analyze_all_items(zot, config: Dict[str, Any], skip_analyzed: bool = False, task_name: str = 'llm_summary') -> Dict[str, Any]:
+    """
+    Analyze all items in the entire library using LLM (follows same pattern as analyze_unfiled_items).
+    
+    Args:
+        zot: Zotero client instance
+        config: Configuration dictionary
+        skip_analyzed: If True, skip items that already have task-specific tags
+        task_name: Name of the task to perform
+        
+    Returns:
+        Analysis results dictionary
+    """
+    try:
+        # Get task-specific tag for efficient filtering
+        TASK_CONFIGS = {
+            'llm_summary': {'tag': 'llm_summary'},
+            'key_references': {'tag': 'key_references'}
+        }
+        
+        if task_name not in TASK_CONFIGS:
+            raise ValueError(f"Unknown task: {task_name}. Available tasks: {list(TASK_CONFIGS.keys())}")
+        
+        tag_name = TASK_CONFIGS[task_name]['tag']
+        
+        # Get all items efficiently - use API filtering if skip_analyzed is True
+        if skip_analyzed:
+            # Use Zotero API to get only items WITHOUT the tag (most efficient)
+            all_items = zot.everything(zot.items(tag=f'-{tag_name}'))
+            logging.info(f"Fetched items without '{tag_name}' tag using API filtering")
+        else:
+            # Get all items normally
+            all_items = zot.everything(zot.items())
+            logging.info("Fetched all items from library")
+        
+        # Filter to only parent items (same as get_unfiled_items pattern)
+        parent_items = [
+            item for item in all_items 
+            if not item['data'].get('parentItem')  # Only parent items
+        ]
+        
+        logging.info(f"Found {len(parent_items)} parent items to potentially analyze")
+        
+        # Use existing shared analysis logic, but disable skip_analyzed if we already filtered
+        effective_skip_analyzed = False if skip_analyzed else skip_analyzed
+        return _analyze_items_list(zot, parent_items, config, effective_skip_analyzed, task_name, 'All Items')
+        
+    except Exception as e:
+        logging.error(f"Failed to analyze all items: {e}")
+        raise
+
+
 def manage_missing_pdf_flags(zot, config: Dict[str, Any]) -> Dict[str, Any]:
     """
     Database-level task to manage missing_pdf flags on all items.

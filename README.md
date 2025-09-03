@@ -6,9 +6,9 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 ## Tasks
 
-- **LLM Summary** (`llm_summary`): Uses Zotero's web API to analyze a paper and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item. Works on both individual items and entire collections.
+- **LLM Summary** (`llm_summary`): Uses Zotero's web API to analyze a paper and write the summary to a note attached to the item. Adds a "llm_summary" tag to the item. Works on individual items, entire collections, and database-wide (all items in library).
 
-- **Key References** (`key_references`): Extracts the most important and influential references from a research paper and writes them to a "Key References" note. Adds a "key_references" tag to the item. Works on both individual items and entire collections.
+- **Key References** (`key_references`): Extracts the most important and influential references from a research paper and writes them to a "Key References" note. Adds a "key_references" tag to the item. Works on individual items, entire collections, and database-wide (all items in library).
 
 - **Missing PDF** (`missing_pdf`): Database-level task that flags all items without PDF attachments by adding a "missing_pdf" tag. Also removes the flag from items that now have PDFs. Prints the names and collection paths of affected items.
 
@@ -68,6 +68,12 @@ The analysis tasks automatically skip items with existing tags to prevent duplic
 
 6. **Database-level tasks**:
    ```bash
+   # Generate LLM summaries for ALL items in the entire library
+   python run_assistant.py llm_summary
+   
+   # Extract key references for ALL items in the entire library
+   python run_assistant.py key_references
+   
    # Flag all items missing PDF attachments
    python run_assistant.py missing_pdf
    ```
@@ -86,8 +92,8 @@ python run_assistant.py [OPTIONS] TASK [OBJECT_TYPE] [TASK_OPTIONS]
 - `collection` - Process all items in a collection
 
 **Tasks:**
-- `llm_summary` - Generate LLM analysis summary (requires object type)
-- `key_references` - Extract key references from paper (requires object type)  
+- `llm_summary` - Generate LLM analysis summary (item/collection/database-wide)
+- `key_references` - Extract key references from paper (item/collection/database-wide)  
 - `missing_pdf` - Flag items missing PDF attachments (database-level)
 - `summary_qa` - Answer questions using collection summaries (collection-level only)
 
@@ -147,8 +153,10 @@ python run_assistant.py --verbose llm_summary collection --collection-path "Rese
 python run_assistant.py llm_summary item --item-id ABC123
 # (Set include_fulltext: false in config.yaml for metadata-only analysis)
 
-# Database-level task: flag items missing PDFs
-python run_assistant.py missing_pdf
+# Database-level tasks
+python run_assistant.py llm_summary      # Process ALL items in the entire library
+python run_assistant.py key_references  # Extract key references for ALL items
+python run_assistant.py missing_pdf     # Flag items missing PDFs
 
 # Answer questions using collection summaries (creates a note in "#LLM QA/[TopLevelCollection]" subcollection)
 python run_assistant.py summary_qa collection --collection-path "Research/AI Papers" --question "What are the main limitations discussed in these papers?"

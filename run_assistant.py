@@ -129,12 +129,8 @@ def main_cli():
         # Get Zotero client
         zot = main.get_zotero_client(config)
         
-        # Check if task requires an object type
-        if args.task in ['llm_summary', 'key_references']:
-            if not args.object_type:
-                print(f"Error: object type (item or collection) required for {args.task} task")
-                sys.exit(1)
-        elif args.task == 'summary_qa':
+        # No object type validation needed - llm_summary and key_references support database-wide mode
+        if args.task == 'summary_qa':
             # summary_qa only works on collections
             if not args.object_type or args.object_type != 'collection':
                 print(f"Error: summary_qa task only works on collections")
@@ -365,6 +361,27 @@ def main_cli():
         elif args.object_type:
             print(f"Unknown object type: {args.object_type}")
             sys.exit(1)
+        elif args.task in ['llm_summary', 'key_references']:
+            # Handle database-wide task (no object_type specified)
+            result = tasks.analyze_all_items(zot, config, args.skip_analyzed, args.task)
+            
+            # Print summary (same format as unfiled items)
+            print(f"\nAll Items {args.task} Summary:")
+            print(f"  Total Items: {result['total_items']}")
+            print(f"  Successfully Processed: {result['successful_analyses']}")
+            print(f"  Failed: {result['failed_analyses']}")
+            print(f"  Skipped Items: {result['skipped_analyses']}")
+            
+            # Print detailed skip/fail information
+            if result.get('skipped_no_fulltext'):
+                print(f"\nItems skipped (no fulltext):")
+                for title in result['skipped_no_fulltext']:
+                    print(f"  - {title}")
+                    
+            if result.get('failed_items'):
+                print(f"\nItems that failed:")
+                for item_error in result['failed_items']:
+                    print(f"  - {item_error}")
         elif args.task == 'missing_pdf':
             # Handle missing_pdf database-level task
             result = tasks.manage_missing_pdf_flags(zot, config)
