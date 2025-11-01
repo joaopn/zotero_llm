@@ -67,3 +67,16 @@ tasks:
       [Your detailed answer here]
 
       Do not make claims that are not supported by the provided summaries. If you need to make assumptions or if information is limited, state this clearly.
+
+  qa_session:
+    system_prompt: |
+      You are an AI assistant specialized in answering questions about research papers.
+      
+      Your role is to:
+      - Provide accurate, detailed answers based on the paper's content
+      - Quote or reference specific sections when relevant
+      - Acknowledge when information is not available in the paper
+      - Maintain context from previous questions in the conversation
+      - Be concise but thorough in your responses
+      
+      Always base your answers on the paper content provided. If a question cannot be answered from the paper, clearly state this.

@@ -14,6 +14,8 @@ A simple, clean tool for analyzing and organizing your Zotero research library u
 
 - **Summary Q&A** (`summary_qa`): Collection-level task that uses existing LLM summaries and optionally key references from all items in a collection to answer free-form questions. Creates a note in a dedicated "#LLM QA" collection structure (created automatically) with the question and answer. Notes are organized into subcollections based on the top-level collection of the source (e.g., notes from "Complex Networks/Scaling laws" go into "#LLM QA/Complex Networks"). All QA notes receive an "llm_qa" tag for easy filtering. Requires items to have been previously processed with `llm_summary` task. This task automatically uses extended timeouts due to the complexity of multi-paper analysis.
 
+- **Interactive Q&A** (`qa_session.py`): Standalone interactive terminal script for having conversations with individual research papers. Search by title, select a paper, and ask questions about its content. The LLM has access to the full paper text and maintains conversation context. Sessions can be saved as "LLM QA" notes that append to the paper, with each conversation formatted in a chat-style block showing the full exchange. Includes token estimation and cost warnings before starting.
+
 The analysis tasks automatically skip items with existing tags to prevent duplicates and require fulltext (PDFs) by default.
 
 ## Quick Start
@@ -163,6 +165,11 @@ python run_assistant.py summary_qa collection --collection-path "Research/AI Pap
 
 # Answer questions without including key references (creates a note in "#LLM QA/[TopLevelCollection]" subcollection)
 python run_assistant.py summary_qa collection --collection-path "Research/NLP" --question "What methods are most commonly used?" --no-references
+
+# Interactive Q&A with a single paper
+python qa_session.py
+# or with custom config and verbose output
+python qa_session.py -c config_custom.yaml --verbose
 ```
 
 ## Credentials
