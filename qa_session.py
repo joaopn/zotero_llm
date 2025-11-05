@@ -17,6 +17,11 @@ from typing import List, Dict, Any, Optional
 from difflib import SequenceMatcher
 from zotero_llm import main, llm
 
+# Terminal color codes
+COLOR_USER = '\033[92m'      # Bright green
+COLOR_ASSISTANT = '\033[96m' # Bright cyan
+COLOR_RESET = '\033[0m'      # Reset to default
+
 
 class QASession:
     """Manages an interactive Q&A session with a research paper."""
@@ -229,7 +234,7 @@ Full Text:
             while True:
                 # Get user question
                 try:
-                    question = input("\nYou: ").strip()
+                    question = input(f"\n{COLOR_USER}You:{COLOR_RESET} ").strip()
                 except EOFError:
                     break
                 
@@ -251,12 +256,12 @@ User question: {question}
 Please provide a helpful answer based on the paper content above."""
                 
                 # Call LLM
-                print("\nAssistant: [thinking...]", end='', flush=True)
+                print(f"\n{COLOR_ASSISTANT}Assistant:{COLOR_RESET} [thinking...]", end='', flush=True)
                 try:
                     response = llm.call_llm(full_prompt, self.config)
                     # Clear the "thinking" message and print response
-                    print("\r" + " " * 30 + "\r", end='', flush=True)  # Clear the line
-                    print("Assistant: ", end='', flush=True)
+                    print("\r" + " " * 40 + "\r", end='', flush=True)  # Clear the line
+                    print(f"{COLOR_ASSISTANT}Assistant:{COLOR_RESET} ", end='', flush=True)
                     print(response)
                     
                     # Save to conversation history
